@@ -33,8 +33,8 @@ func (p *FileParser) Parse(filePath string, src []byte) (*ast.File, error) {
 	return file, nil
 }
 
-// ExtractDeps extracts dependencies and basic information from the AST
-func (p *FileParser) ExtractDeps(file *ast.File) *types.FileInfo {
+// ExtractFileInfo extracts basic information from the AST
+func (p *FileParser) ExtractFileInfo(file *ast.File) *types.FileInfo {
 	info := types.NewFileInfo()
 
 	// Extract package name

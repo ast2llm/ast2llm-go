@@ -14,3 +14,23 @@ func NewFileInfo() *FileInfo {
 		Functions: make([]string, 0),
 	}
 }
+
+// Node represents a package in the dependency graph
+type Node struct {
+	PkgPath   string   // Package path
+	Functions []string // Exported functions
+	DependsOn []string // Imported packages
+	Files     []string // Source files in the package
+}
+
+// DependencyGraph represents the project's dependency structure
+type DependencyGraph struct {
+	Nodes map[string]*Node // Key: package path
+}
+
+// NewDependencyGraph creates a new DependencyGraph instance
+func NewDependencyGraph() *DependencyGraph {
+	return &DependencyGraph{
+		Nodes: make(map[string]*Node),
+	}
+}
