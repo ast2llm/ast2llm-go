@@ -3,28 +3,33 @@ package main
 import (
 	"log"
 
-	mcp_golang "github.com/metoro-io/mcp-golang"
-	"github.com/metoro-io/mcp-golang/transport/stdio"
-	"github.com/vlad/ast2llm-go/internal/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/vlad/ast2llm-go/internal/parser"
+	"github.com/vlad/ast2llm-go/internal/prompts"
+	"github.com/vlad/ast2llm-go/internal/tools"
 )
 
 func main() {
-	log.Println("[MCP] Starting MCP server initialization...")
-	server := mcp_golang.NewServer(stdio.NewStdioServerTransport())
-	log.Println("[MCP] Server created")
+	// Initialize components
+	s := server.NewMCPServer(
+		"AST2LLM",
+		"1.0.0",
+		server.WithToolCapabilities(false),
+	)
 	p := parser.New()
-	log.Println("[MCP] Parser created")
 
 	// Register tools
-	if err := mcp.RegisterTools(server, p); err != nil {
-		log.Fatalf("[MCP] Failed to register tools: %v", err)
+	if err := tools.RegisterTools(s, p); err != nil {
+		log.Fatalf("Failed to register tools: %v", err)
 	}
-	log.Println("[MCP] Tools registered")
 
-	// Start server
-	log.Println("[MCP] Starting MCP server...")
-	if err := server.Serve(); err != nil {
-		log.Fatalf("[MCP] Server failed: %v", err)
+	// Register prompts
+	if err := prompts.RegisterPrompts(s, p); err != nil {
+		log.Fatalf("Failed to register prompts: %v", err)
+	}
+
+	// Start the stdio server
+	if err := server.ServeStdio(s); err != nil {
+		log.Fatalf("Server error: %v\n", err)
 	}
 }
