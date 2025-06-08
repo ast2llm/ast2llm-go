@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -281,6 +282,146 @@ type InlineCommentStruct struct { // This is an inline comment
 
 			structs := p.ExtractStructsWithComments(file)
 			assert.ElementsMatch(t, tt.expected, structs)
+		})
+	}
+}
+
+func TestExtractUsedImportedStructs(t *testing.T) {
+	t.Parallel()
+
+	p := New()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name: "direct import usage",
+			input: `package main
+
+import (
+	"context"
+)
+
+func main() {
+	var myCtx context.Context // Variable declaration using imported type
+	_ = myCtx
+}
+`,
+			expected: []string{"context.Context"},
+		},
+		{
+			name: "import usage in slice",
+			input: `package main
+
+import (
+	"context"
+)
+
+func main() {
+	var myCtxs []context.Context // Variable declaration using imported type
+	_ = myCtxs
+}
+`,
+			expected: []string{"context.Context"},
+		},
+		{
+			name: "aliased import usage",
+			input: `package main
+
+import (
+	myctx "context"
+)
+
+func main() {
+	var anotherCtx myctx.Context // Variable declaration using aliased imported type
+	_ = anotherCtx
+}
+`,
+			expected: []string{"myctx.Context"},
+		},
+		{
+			name: "multiple imported struct usages",
+			input: `package main
+
+import (
+	"fmt"
+	"net/http"
+	"io"
+)
+
+func main() {
+	client := &http.Client{}
+	var req *http.Request
+	reader := io.Reader(nil)
+	fmt.Println(client, req, reader)
+}
+`,
+			expected: []string{"http.Client", "http.Request", "io.Reader", "fmt.Println"},
+		},
+		{
+			name: "no imported struct usage",
+			input: `package main
+
+func main() {}
+`,
+			expected: []string{},
+		},
+		{
+			name: "struct declaration without usage",
+			input: `package main
+
+import (
+	"context"
+)
+
+type MyCustomStruct struct {
+	Ctx context.Context
+}
+`,
+			expected: []string{"context.Context"},
+		},
+		{
+			name: "struct literal instantiation",
+			input: `package main
+
+import (
+	"sync"
+)
+
+func main() {
+	var wg sync.WaitGroup
+	_ = wg
+}
+`,
+			expected: []string{"sync.WaitGroup"},
+		},
+		{
+			name: "variable declaration with imported type",
+			input: `package main
+
+import (
+	"time"
+)
+
+func main() {
+	var t time.Time
+	_ = t
+}
+`,
+			expected: []string{"time.Time"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			file, err := p.Parse("test.go", []byte(tt.input))
+			assert.NoError(t, err)
+
+			usedStructs := p.ExtractUsedImportedStructs(file)
+			assert.ElementsMatch(t, tt.expected, usedStructs, fmt.Sprintf("Failed for case %v", tt.name))
 		})
 	}
 }

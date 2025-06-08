@@ -2,18 +2,20 @@ package types
 
 // FileInfo represents the parsed information about a Go file
 type FileInfo struct {
-	PackageName string   // Name of the package
-	Imports     []string // List of imported packages
-	Functions   []string // List of function names
-	Structs     []string // List of struct names with their comments
+	PackageName         string   // Name of the package
+	Imports             []string // List of imported packages
+	Functions           []string // List of function names
+	Structs             []string // List of struct names with their comments
+	UsedImportedStructs []string // List of imported struct names used in the file
 }
 
 // NewFileInfo creates a new FileInfo instance
 func NewFileInfo() *FileInfo {
 	return &FileInfo{
-		Imports:   make([]string, 0),
-		Functions: make([]string, 0),
-		Structs:   make([]string, 0),
+		Imports:             make([]string, 0),
+		Functions:           make([]string, 0),
+		Structs:             make([]string, 0),
+		UsedImportedStructs: make([]string, 0),
 	}
 }
 
