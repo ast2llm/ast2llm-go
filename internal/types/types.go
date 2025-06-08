@@ -5,6 +5,7 @@ type FileInfo struct {
 	PackageName string   // Name of the package
 	Imports     []string // List of imported packages
 	Functions   []string // List of function names
+	Structs     []string // List of struct names with their comments
 }
 
 // NewFileInfo creates a new FileInfo instance
@@ -12,6 +13,7 @@ func NewFileInfo() *FileInfo {
 	return &FileInfo{
 		Imports:   make([]string, 0),
 		Functions: make([]string, 0),
+		Structs:   make([]string, 0),
 	}
 }
 

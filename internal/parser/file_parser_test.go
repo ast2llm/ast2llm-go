@@ -203,3 +203,84 @@ go 1.21`), 0644)
 	assert.Contains(t, graph.Nodes["test/a"].Functions, "A")
 	assert.Contains(t, graph.Nodes["test/b"].Functions, "B")
 }
+
+func TestExtractStructsWithComments(t *testing.T) {
+	t.Parallel()
+
+	p := New()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name: "struct with doc comment",
+			input: `package main
+
+// MyStruct represents a sample structure.
+type MyStruct struct {
+	Field1 string
+}
+`,
+			expected: []string{"MyStruct: MyStruct represents a sample structure."},
+		},
+		{
+			name: "struct without comment",
+			input: `package main
+
+type AnotherStruct struct {
+	Field2 int
+}
+`,
+			expected: []string{"AnotherStruct"},
+		},
+		{
+			name: "multiple structs",
+			input: `package main
+
+// StructOne is the first struct.
+type StructOne struct {}
+
+type StructTwo struct {}
+
+// StructThree is the third struct.
+type StructThree struct {}
+`,
+			expected: []string{
+				"StructOne: StructOne is the first struct.",
+				"StructTwo",
+				"StructThree: StructThree is the third struct.",
+			},
+		},
+		{
+			name: "no structs",
+			input: `package main
+
+func main() {}
+`,
+			expected: []string{},
+		},
+		{
+			name: "struct with inline comment (not doc comment)",
+			input: `package main
+
+type InlineCommentStruct struct { // This is an inline comment
+	Field string
+}
+`,
+			expected: []string{"InlineCommentStruct"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			file, err := p.Parse("test.go", []byte(tt.input))
+			assert.NoError(t, err)
+
+			structs := p.ExtractStructsWithComments(file)
+			assert.ElementsMatch(t, tt.expected, structs)
+		})
+	}
+}

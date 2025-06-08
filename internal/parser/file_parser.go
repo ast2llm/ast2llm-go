@@ -59,5 +59,46 @@ func (p *FileParser) ExtractFileInfo(file *ast.File) *types.FileInfo {
 		}
 	}
 
+	// Extract struct names and comments
+	info.Structs = p.ExtractStructsWithComments(file)
+
 	return info
+}
+
+// ExtractStructsWithComments extracts struct names and their associated comments
+func (p *FileParser) ExtractStructsWithComments(file *ast.File) []string {
+	var structs []string
+
+	for _, decl := range file.Decls {
+		genDecl, isGenDecl := decl.(*ast.GenDecl)
+		if !isGenDecl || genDecl.Tok != token.TYPE {
+			continue
+		}
+
+		for _, spec := range genDecl.Specs {
+			typeSpec, isTypeSpec := spec.(*ast.TypeSpec)
+			if !isTypeSpec {
+				continue
+			}
+
+			if _, isStructType := typeSpec.Type.(*ast.StructType); isStructType {
+				structName := typeSpec.Name.Name
+				description := ""
+				if genDecl.Doc != nil {
+					// Use the doc comment associated with the GenDecl (type declaration)
+					description = strings.TrimSpace(genDecl.Doc.Text())
+				} else if typeSpec.Doc != nil {
+					// Fallback to doc comment associated with the TypeSpec if available
+					description = strings.TrimSpace(typeSpec.Doc.Text())
+				}
+
+				if description != "" {
+					structs = append(structs, fmt.Sprintf("%s: %s", structName, description))
+				} else {
+					structs = append(structs, structName)
+				}
+			}
+		}
+	}
+	return structs
 }
