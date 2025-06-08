@@ -1,15 +1,15 @@
 package parser
 
 import (
+	"go/ast"
 	"log"
-	"path/filepath"
 
 	"github.com/vlad/ast2llm-go/internal/types"
 	"golang.org/x/tools/go/packages"
 )
 
 // BuildGraph constructs a dependency graph for the project
-func (p *FileParser) BuildGraph(rootPath string) (*types.DependencyGraph, error) {
+func (p *ProjectParser) BuildGraph(rootPath string) (*types.DependencyGraph, error) {
 	log.Printf("Building graph for %s", rootPath)
 
 	cfg := &packages.Config{
@@ -27,7 +27,9 @@ func (p *FileParser) BuildGraph(rootPath string) (*types.DependencyGraph, error)
 	// First pass: create nodes for all packages
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			log.Printf("Warning: package %s has errors: %v", pkg.PkgPath, pkg.Errors)
+			for _, err := range pkg.Errors {
+				log.Printf("Warning: package %s has errors: %v", pkg.PkgPath, err)
+			}
 			continue
 		}
 
@@ -35,6 +37,7 @@ func (p *FileParser) BuildGraph(rootPath string) (*types.DependencyGraph, error)
 			PkgPath:   pkg.PkgPath,
 			Files:     pkg.GoFiles,
 			DependsOn: make([]string, 0),
+			Functions: make([]string, 0), // Initialize Functions slice
 		}
 
 		// Add dependencies
@@ -42,33 +45,20 @@ func (p *FileParser) BuildGraph(rootPath string) (*types.DependencyGraph, error)
 			node.DependsOn = append(node.DependsOn, impPath)
 		}
 
+		// Extract exported functions for this package
+		for _, file := range pkg.Syntax {
+			ast.Inspect(file, func(n ast.Node) bool {
+				if funcDecl, ok := n.(*ast.FuncDecl); ok {
+					// Check if the function is exported (starts with uppercase)
+					if funcDecl.Name.IsExported() {
+						node.Functions = append(node.Functions, funcDecl.Name.Name)
+					}
+				}
+				return true
+			})
+		}
 		graph.Nodes[pkg.PkgPath] = node
 	}
 
-	// Second pass: extract exported functions
-	for _, pkg := range pkgs {
-		if len(pkg.Errors) > 0 {
-			continue
-		}
-
-		node := graph.Nodes[pkg.PkgPath]
-		for _, file := range pkg.Syntax {
-			functions := p.ExtractExportedFunctions(file)
-			node.Functions = append(node.Functions, functions...)
-		}
-	}
-
 	return graph, nil
-}
-
-// GetRelativePath returns the relative path between two packages
-func (p *FileParser) GetRelativePath(from, to string) string {
-	fromDir := filepath.Dir(from)
-	toDir := filepath.Dir(to)
-	rel, err := filepath.Rel(fromDir, toDir)
-	if err != nil {
-		log.Printf("Warning: could not get relative path from %s to %s: %v", from, to, err)
-		return to
-	}
-	return rel
 }

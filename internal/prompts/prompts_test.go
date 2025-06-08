@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -15,7 +16,7 @@ func TestNewEnhancePrompt(t *testing.T) {
 	prompt := NewEnhancePrompt()
 
 	assert.Equal(t, "enhance", prompt.Name)
-	assert.Equal(t, "Enhance Go code with better documentation and error handling", prompt.Description)
+	assert.Equal(t, "Enhance Go project code with better documentation and error handling", prompt.Description)
 
 	// Helper function to find argument by name
 	findArg := func(name string) *mcp.PromptArgument {
@@ -28,15 +29,10 @@ func TestNewEnhancePrompt(t *testing.T) {
 	}
 
 	// Check required arguments
-	filePathArg := findArg("filePath")
-	require.NotNil(t, filePathArg)
-	assert.True(t, filePathArg.Required)
-	assert.Equal(t, "Path to the Go file", filePathArg.Description)
-
-	sourceCodeArg := findArg("sourceCode")
-	require.NotNil(t, sourceCodeArg)
-	assert.True(t, sourceCodeArg.Required)
-	assert.Equal(t, "Raw Go code", sourceCodeArg.Description)
+	projectPathArg := findArg("projectPath")
+	require.NotNil(t, projectPathArg)
+	assert.True(t, projectPathArg.Required)
+	assert.Equal(t, "Path to the Go project", projectPathArg.Description)
 
 	// Check optional arguments
 	focusSymbolArg := findArg("focusSymbol")
@@ -69,38 +65,45 @@ func TestEnhancePromptHandler(t *testing.T) {
 		{
 			name: "valid request",
 			args: map[string]string{
-				"filePath":   "test.go",
-				"sourceCode": "package main\n\nfunc main() {}\n",
+				"projectPath": "./testdata/validproject",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing required args",
 			args: map[string]string{
-				"filePath": "test.go",
+				"focusSymbol": "main",
 			},
 			wantErr:     true,
-			errContains: "filePath and sourceCode are required",
+			errContains: "projectPath is required",
 		},
 		{
 			name: "with focus symbol",
 			args: map[string]string{
-				"filePath":    "test.go",
-				"sourceCode":  "package main\n\nfunc main() {}\n",
-				"focusSymbol": "main",
+				"projectPath": "./testdata/validproject",
+				"focusSymbol": "MyStruct",
 			},
 			wantErr: false,
 		},
 		{
 			name: "with minify",
 			args: map[string]string{
-				"filePath":   "test.go",
-				"sourceCode": "package main\n\nfunc main() {}\n",
-				"minify":     "true",
+				"projectPath": "./testdata/validproject",
+				"minify":      "true",
 			},
 			wantErr: false,
 		},
 	}
+
+	// Create dummy testdata directory and files
+	err = os.MkdirAll("testdata/validproject", 0755)
+	require.NoError(t, err)
+	err = os.WriteFile("testdata/validproject/main.go", []byte("package main\n\n// MyStruct is a struct\ntype MyStruct struct{}\nfunc main(){}\n"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile("testdata/validproject/go.mod", []byte("module testproject\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	defer os.RemoveAll("testdata")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -131,14 +134,28 @@ func TestEnhancePromptHandler(t *testing.T) {
 			assert.Equal(t, mcp.Role("system"), systemMsg.Role)
 			textContent, ok := systemMsg.Content.(mcp.TextContent)
 			require.True(t, ok)
-			assert.Contains(t, textContent.Text, "Go code enhancement assistant")
+			assert.Contains(t, textContent.Text, "Go project code enhancement assistant")
 
-			// Verify user message with source code
+			// Verify user message with project info
 			userMsg := result.Messages[1]
 			assert.Equal(t, mcp.Role("user"), userMsg.Role)
 			textContent, ok = userMsg.Content.(mcp.TextContent)
 			require.True(t, ok)
-			assert.Contains(t, textContent.Text, tt.args["sourceCode"])
+			assert.Contains(t, textContent.Text, "project structure and parsed AST information")
+			assert.Contains(t, textContent.Text, "MyStruct") // Check for some expected content
+			assert.Contains(t, textContent.Text, "main.go")
+
+			if tt.name == "with focus symbol" {
+				assert.Contains(t, textContent.Text, tt.args["focusSymbol"])
+			}
+
+			// Check for minify message if applicable
+			if tt.args["minify"] == "true" {
+				// The minify message is the last one added if minify is true
+				lastMsg := result.Messages[len(result.Messages)-1]
+				assert.Contains(t, lastMsg.Content.(mcp.TextContent).Text, "remove all comments and format the code to be more concise.")
+			}
+
 		})
 	}
 }
@@ -148,7 +165,7 @@ func TestRegisterPrompts(t *testing.T) {
 	p := parser.New()
 	s := server.NewMCPServer("Test Server", "1.0.0")
 
-	// Test registration
+	// Register the prompt
 	err := RegisterPrompts(s, p)
 	require.NoError(t, err)
 
@@ -156,12 +173,21 @@ func TestRegisterPrompts(t *testing.T) {
 	handler := EnhancePromptHandler(p)
 	require.NotNil(t, handler)
 
+	// Create dummy testdata directory and files for the handler to use
+	err = os.MkdirAll("testdata/validproject", 0755)
+	require.NoError(t, err)
+	err = os.WriteFile("testdata/validproject/main.go", []byte("package main\n\nfunc main(){}\n"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile("testdata/validproject/go.mod", []byte("module testproject\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	defer os.RemoveAll("testdata")
+
 	// Test the handler with a basic request
 	request := mcp.GetPromptRequest{
 		Params: mcp.GetPromptParams{
 			Arguments: map[string]string{
-				"filePath":   "test.go",
-				"sourceCode": "package main\n\nfunc main() {}\n",
+				"projectPath": "./testdata/validproject",
 			},
 		},
 	}
@@ -169,5 +195,5 @@ func TestRegisterPrompts(t *testing.T) {
 	result, err := handler(context.Background(), request)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "Enhance Go code with better documentation and error handling", result.Description)
+	assert.Equal(t, "Enhance Go project code with better documentation and error handling", result.Description)
 }

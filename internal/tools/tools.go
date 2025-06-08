@@ -12,55 +12,44 @@ import (
 
 // ParseGoArgs defines arguments for the parse_go tool
 type ParseGoArgs struct {
-	FilePath   string `json:"filePath" jsonschema:"required,description=Path to the Go file"`
-	SourceCode string `json:"sourceCode" jsonschema:"required,description=Raw Go code"`
+	FilePath string `json:"filePath" jsonschema:"required,description=Path to the Go project"`
 }
 
 // NewParseGoTool returns the mcp.Tool for parsing Go code
 func NewParseGoTool() mcp.Tool {
 	return mcp.NewTool("parse_go",
-		mcp.WithDescription("Parse Go code and return its AST"),
+		mcp.WithDescription("Parse Go project and return its detailed information"),
 		mcp.WithString("filePath",
 			mcp.Required(),
-			mcp.Description("Path to the Go file"),
-		),
-		mcp.WithString("sourceCode",
-			mcp.Required(),
-			mcp.Description("Raw Go code"),
+			mcp.Description("Path to the Go project"),
 		),
 	)
 }
 
 // ParseGoToolHandler returns a handler for the parse_go tool
-func ParseGoToolHandler(p *parser.FileParser) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func ParseGoToolHandler(p *parser.ProjectParser) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filePath, err := request.RequireString("filePath")
+		projectPath, err := request.RequireString("filePath")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		sourceCode, err := request.RequireString("sourceCode")
+		fileInfo, err := p.ParseProject(projectPath)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to parse project: %v", err)), nil
 		}
 
-		file, err := p.Parse(filePath, []byte(sourceCode))
+		fileInfoJSON, err := json.Marshal(fileInfo)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to parse file: %v", err)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal project info: %v", err)), nil
 		}
 
-		fileInfo := p.ExtractFileInfo(file)
-		astJSON, err := json.Marshal(fileInfo)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal AST: %v", err)), nil
-		}
-
-		return mcp.NewToolResultText(string(astJSON)), nil
+		return mcp.NewToolResultText(string(fileInfoJSON)), nil
 	}
 }
 
 // RegisterTools registers all tools with the MCP server
-func RegisterTools(s *server.MCPServer, p *parser.FileParser) error {
+func RegisterTools(s *server.MCPServer, p *parser.ProjectParser) error {
 	s.AddTool(NewParseGoTool(), ParseGoToolHandler(p))
 	return nil
 }

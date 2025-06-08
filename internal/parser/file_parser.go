@@ -1,291 +1,259 @@
 package parser
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
+	gotypes "go/types" // Alias go/types to avoid conflict
 	"log"
 	"strings"
 
-	"github.com/vlad/ast2llm-go/internal/types"
+	ourtypes "github.com/vlad/ast2llm-go/internal/types" // Alias our types
+	"golang.org/x/tools/go/packages"
 )
 
-// FileParser handles parsing of Go source files
-type FileParser struct {
+// ProjectParser handles parsing of Go projects using go/packages and go/types
+type ProjectParser struct {
 	fset *token.FileSet
 }
 
-// New creates a new FileParser instance
-func New() *FileParser {
-	return &FileParser{
+// New creates a new ProjectParser instance
+func New() *ProjectParser {
+	return &ProjectParser{
 		fset: token.NewFileSet(),
 	}
 }
 
-// Parse loads a file and returns its AST
-func (p *FileParser) Parse(filePath string, src []byte) (*ast.File, error) {
-	file, err := parser.ParseFile(p.fset, filePath, src, parser.ParseComments)
+// ParseProject loads a Go project and extracts detailed information for all Go files within it.
+// It returns a map where keys are absolute file paths and values are their corresponding FileInfo.
+func (p *ProjectParser) ParseProject(projectPath string) (map[string]*ourtypes.FileInfo, error) {
+	cfg := &packages.Config{
+		Mode: packages.LoadSyntax | packages.LoadTypes | packages.LoadImports | packages.LoadFiles,
+		Fset: p.fset,
+		Dir:  projectPath,
+	}
+
+	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		log.Printf("Error parsing file %s: %v", filePath, err)
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-	return file, nil
-}
-
-// ExtractFileInfo extracts basic information from the AST
-func (p *FileParser) ExtractFileInfo(file *ast.File) *types.FileInfo {
-	info := types.NewFileInfo()
-
-	// Extract package name
-	info.PackageName = file.Name.Name
-
-	// Extract imports
-	importMap := make(map[string]string)
-	for _, imp := range file.Imports {
-		path := strings.Trim(imp.Path.Value, "\"")
-		if imp.Name != nil {
-			importMap[imp.Name.Name] = path
-		} else {
-			parts := strings.Split(path, "/")
-			importMap[parts[len(parts)-1]] = path
-		}
+		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	// Convert map to slice (for direct imports in FileInfo)
-	for _, imp := range file.Imports {
-		info.Imports = append(info.Imports, strings.Trim(imp.Path.Value, "\""))
+	if len(pkgs) == 0 {
+		return nil, fmt.Errorf("no packages found in %s", projectPath)
 	}
 
-	// Extract function names
-	for _, decl := range file.Decls {
-		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-			info.Functions = append(info.Functions, funcDecl.Name.Name)
-		}
-	}
+	fileInfos := make(map[string]*ourtypes.FileInfo)
 
-	// Extract local struct names, comments, fields, and methods
-	info.Structs = p.ExtractLocalStructInfo(file)
-
-	// Extract used imported struct names (only name for now)
-	info.UsedImportedStructs = p.ExtractUsedImportedStructInfo(file)
-
-	return info
-}
-
-// ExtractLocalStructInfo extracts detailed information about structs declared in the file
-func (p *FileParser) ExtractLocalStructInfo(file *ast.File) []*types.StructInfo {
-	var structs []*types.StructInfo
-
-	for _, decl := range file.Decls {
-		genDecl, isGenDecl := decl.(*ast.GenDecl)
-		if !isGenDecl || genDecl.Tok != token.TYPE {
-			continue
-		}
-
-		for _, spec := range genDecl.Specs {
-			typeSpec, isTypeSpec := spec.(*ast.TypeSpec)
-			if !isTypeSpec {
-				continue
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			for _, err := range pkg.Errors {
+				log.Printf("Package error in %s: %v", pkg.PkgPath, err)
 			}
+			// Decide whether to return an error or continue with partial results
+			// For now, let's continue processing even with package errors, but log them.
+		}
 
-			if structType, isStructType := typeSpec.Type.(*ast.StructType); isStructType {
-				structInfo := types.NewStructInfo()
-				structInfo.Name = typeSpec.Name.Name
-
-				// Extract struct comment
-				if genDecl.Doc != nil {
-					structInfo.Comment = strings.TrimSpace(genDecl.Doc.Text())
-				} else if typeSpec.Doc != nil {
-					structInfo.Comment = strings.TrimSpace(typeSpec.Doc.Text())
-				}
-
-				// Extract fields
-				structInfo.Fields = p.extractFields(structType)
-
-				// Extract methods
-				structInfo.Methods = p.extractMethods(file, structInfo.Name)
-
-				structs = append(structs, structInfo)
-			}
+		for _, file := range pkg.Syntax {
+			absolutePath := p.fset.File(file.Pos()).Name()
+			fileInfo := p.extractFileInfoForFile(file, pkg)
+			fileInfos[absolutePath] = fileInfo
 		}
 	}
-	return structs
+
+	return fileInfos, nil
 }
 
-// extractFields extracts fields from an ast.StructType
-func (p *FileParser) extractFields(structType *ast.StructType) []*types.StructField {
-	fields := make([]*types.StructField, 0) // Initialize as empty slice
-	if structType.Fields == nil || len(structType.Fields.List) == 0 {
-		return fields // Return empty slice
-	}
-	for _, field := range structType.Fields.List {
-		fieldName := ""
-		if len(field.Names) > 0 {
-			fieldName = field.Names[0].Name // Assuming single name for simplicity
-		}
-		fieldType := p.exprToString(field.Type)
-		fields = append(fields, &types.StructField{Name: fieldName, Type: fieldType})
-	}
-	return fields
-}
+// extractFileInfoForFile extracts detailed information for a single AST file within a package.
+func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Package) *ourtypes.FileInfo {
+	fileInfo := ourtypes.NewFileInfo()
+	fileInfo.PackageName = file.Name.Name
 
-// extractMethods extracts methods associated with a given struct name from the file
-func (p *FileParser) extractMethods(file *ast.File, structName string) []*types.StructMethod {
-	methods := make([]*types.StructMethod, 0) // Initialize as empty slice
+	// Extract imports specific to this file
+	for _, imp := range file.Imports {
+		fileInfo.Imports = append(fileInfo.Imports, strings.Trim(imp.Path.Value, "\""))
+	}
+
+	// Extract functions and detailed struct info from this file
+	localStructsMap := make(map[string]*ourtypes.StructInfo) // To prevent duplicates for methods
+
+	// Iterate over the AST nodes of the current file to find declarations
 	ast.Inspect(file, func(n ast.Node) bool {
-		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
-				recvTypeExpr := funcDecl.Recv.List[0].Type
-				// Dereference pointer receiver if applicable
-				if starExpr, isStar := recvTypeExpr.(*ast.StarExpr); isStar {
-					recvTypeExpr = starExpr.X
-				}
-				if ident, isIdent := recvTypeExpr.(*ast.Ident); isIdent {
-					if ident.Name == structName {
-						method := &types.StructMethod{
-							Name:        funcDecl.Name.Name,
-							Comment:     strings.TrimSpace(funcDecl.Doc.Text()),
-							Parameters:  p.extractParams(funcDecl.Type.Params),
-							ReturnTypes: p.extractResults(funcDecl.Type.Results),
+		if genDecl, ok := n.(*ast.GenDecl); ok {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, isTypeSpec := spec.(*ast.TypeSpec); isTypeSpec {
+					// Check if this typeSpec corresponds to a named type that is a struct
+					if obj := pkg.TypesInfo.Defs[typeSpec.Name]; obj != nil {
+						if namedType, ok := obj.Type().(*gotypes.Named); ok {
+							if structType, ok := namedType.Underlying().(*gotypes.Struct); ok {
+								// This is a struct definition within the current file
+								structInfo := p.extractDetailedStructInfo(obj, namedType, structType, pkg, file)
+								localStructsMap[structInfo.Name] = structInfo
+							}
 						}
-						methods = append(methods, method)
 					}
+				}
+			}
+		} else if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			// Check if it's a standalone function (not a method)
+			if funcDecl.Recv == nil {
+				fileInfo.Functions = append(fileInfo.Functions, funcDecl.Name.Name)
+			}
+		}
+		return true
+	})
+
+	// Convert local structs map to slice
+	for _, sInfo := range localStructsMap {
+		fileInfo.Structs = append(fileInfo.Structs, sInfo)
+	}
+
+	// Extract used imported structs from this file
+	fileInfo.UsedImportedStructs = p.extractUsedImportedStructInfoFromFile(file, pkg)
+
+	return fileInfo
+}
+
+// extractDetailedStructInfo extracts comprehensive details about a struct
+func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType *gotypes.Named, structType *gotypes.Struct, pkg *packages.Package, targetFile *ast.File) *ourtypes.StructInfo {
+	structInfo := ourtypes.NewStructInfo()
+	structInfo.Name = obj.Name()
+
+	// Extract struct comment (requires traversing AST nodes directly within the target file)
+	structComment := ""
+	pos := obj.Pos()
+	ast.Inspect(targetFile, func(n ast.Node) bool {
+		if genDecl, ok := n.(*ast.GenDecl); ok {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Pos() == pos {
+					if genDecl.Doc != nil {
+						structComment = strings.TrimSpace(genDecl.Doc.Text())
+					} else if typeSpec.Doc != nil {
+						structComment = strings.TrimSpace(typeSpec.Doc.Text())
+					}
+					return false // Found it, stop inspecting
 				}
 			}
 		}
 		return true
 	})
-	return methods
-}
+	structInfo.Comment = structComment
 
-// exprToString converts an ast.Expr to its string representation
-func (p *FileParser) exprToString(expr ast.Expr) string {
-	// Handle basic identifiers directly (e.g., string, int, error)
-	if ident, ok := expr.(*ast.Ident); ok {
-		return ident.Name
+	// Extract fields
+	for i := 0; i < structType.NumFields(); i++ {
+		fieldVar := structType.Field(i)
+		fieldTypeName := fieldVar.Type().String() // Use types.Type.String() for canonical name
+		fieldName := fieldVar.Name()
+		structInfo.Fields = append(structInfo.Fields, &ourtypes.StructField{Name: fieldName, Type: fieldTypeName})
 	}
-	// Handle selector expressions (e.g., pkg.Type)
-	if selExpr, ok := expr.(*ast.SelectorExpr); ok {
-		return fmt.Sprintf("%s.%s", p.exprToString(selExpr.X), selExpr.Sel.Name)
-	}
-	// Handle array types (e.g., []Type)
-	if arrayType, ok := expr.(*ast.ArrayType); ok {
-		return fmt.Sprintf("[]%s", p.exprToString(arrayType.Elt))
-	}
-	// Handle map types (e.g., map[KeyType]ValueType)
-	if mapType, ok := expr.(*ast.MapType); ok {
-		return fmt.Sprintf("map[%s]%s", p.exprToString(mapType.Key), p.exprToString(mapType.Value))
-	}
-	// Handle pointer types (e.g., *Type)
-	if starExpr, ok := expr.(*ast.StarExpr); ok {
-		return fmt.Sprintf("*%s", p.exprToString(starExpr.X))
-	}
-	// Fallback for any other complex expressions using ast.Fprint
-	var buf bytes.Buffer
-	fset := token.NewFileSet()
-	ast.Fprint(&buf, fset, expr, nil)
-	return buf.String()
-}
 
-// extractParams extracts parameter types from a FieldList
-func (p *FileParser) extractParams(fl *ast.FieldList) []string {
-	if fl == nil || len(fl.List) == 0 {
-		return []string{}
-	}
-	var params []string
-	for _, field := range fl.List {
-		params = append(params, p.exprToString(field.Type))
-	}
-	return params
-}
+	// Extract methods
+	for i := 0; i < namedType.NumMethods(); i++ {
+		methodObj := namedType.Method(i)
+		sig := methodObj.Type().(*gotypes.Signature)
 
-// extractResults extracts return types from a FieldList
-func (p *FileParser) extractResults(fl *ast.FieldList) []string {
-	if fl == nil || len(fl.List) == 0 {
-		return []string{}
-	}
-	var results []string
-	for _, field := range fl.List {
-		results = append(results, p.exprToString(field.Type))
-	}
-	return results
-}
-
-// ExtractUsedImportedStructInfo extracts names of structs imported from other packages and used in the file
-func (p *FileParser) ExtractUsedImportedStructInfo(file *ast.File) []*types.StructInfo {
-	usedStructs := make(map[string]*types.StructInfo)
-
-	// Map import paths to their local names (aliases)
-	importMap := make(map[string]string)
-	for _, imp := range file.Imports {
-		path := strings.Trim(imp.Path.Value, "\"")
-		if imp.Name != nil {
-			// If there's an alias (e.g., import myalias "path/to/pkg")
-			importMap[imp.Name.Name] = path
-		} else {
-			// No alias, use the last component of the import path
-			parts := strings.Split(path, "/")
-			importMap[parts[len(parts)-1]] = path
+		params := []string{}
+		if sig.Params() != nil {
+			for j := 0; j < sig.Params().Len(); j++ {
+				params = append(params, sig.Params().At(j).Type().String())
+			}
 		}
+
+		results := []string{}
+		if sig.Results() != nil {
+			for j := 0; j < sig.Results().Len(); j++ {
+				results = append(results, sig.Results().At(j).Type().String())
+			}
+		}
+
+		// Method comments also require mapping back to AST if not available directly from types.Object
+		methodComment := ""
+		methodPos := methodObj.Pos()
+		ast.Inspect(targetFile, func(n ast.Node) bool {
+			if funcDecl, ok := n.(*ast.FuncDecl); ok && funcDecl.Name.Pos() == methodPos {
+				if funcDecl.Doc != nil {
+					methodComment = strings.TrimSpace(funcDecl.Doc.Text())
+				}
+				return false // Found it, stop inspecting
+			}
+			return true
+		})
+
+		structInfo.Methods = append(structInfo.Methods, &ourtypes.StructMethod{
+			Name:        methodObj.Name(),
+			Comment:     methodComment,
+			Parameters:  params,
+			ReturnTypes: results,
+		})
 	}
+
+	return structInfo
+}
+
+// extractUsedImportedStructInfoFromFile extracts names of structs imported from other packages and used in the current file.
+func (p *ProjectParser) extractUsedImportedStructInfoFromFile(file *ast.File, pkg *packages.Package) []*ourtypes.StructInfo {
+	usedImportedStructs := make(map[string]*ourtypes.StructInfo)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		var typeExpr ast.Expr
 
 		switch node := n.(type) {
 		case *ast.CompositeLit:
-			// Handles struct literal instantiation (e.g., pkg.StructName{})
 			typeExpr = node.Type
 		case *ast.DeclStmt:
-			// Handles variable declarations with imported types (e.g., var v pkg.StructName)
 			if genDecl, ok := node.Decl.(*ast.GenDecl); ok {
 				for _, spec := range genDecl.Specs {
 					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 						typeExpr = valueSpec.Type
-
 						// Handle slice and map types
 						if arrayType, isArray := typeExpr.(*ast.ArrayType); isArray {
 							typeExpr = arrayType.Elt
 						} else if mapType, isMap := typeExpr.(*ast.MapType); isMap {
 							typeExpr = mapType.Value // We only care about the value type for maps
 						}
-
 					}
 				}
 			}
 		case *ast.Field:
-			// Handles struct fields, function parameters, and return types
 			typeExpr = node.Type
-
 			// Handle slice and map types for fields
 			if arrayType, isArray := typeExpr.(*ast.ArrayType); isArray {
 				typeExpr = arrayType.Elt
 			} else if mapType, isMap := typeExpr.(*ast.MapType); isMap {
 				typeExpr = mapType.Value // We only care about the value type for maps
 			}
+		case *ast.Ident: // Check for direct identifier usage that might refer to an imported type
+			if obj := pkg.TypesInfo.Uses[node]; obj != nil {
+				if namedType, ok := obj.Type().(*gotypes.Named); ok {
+					if namedType.Obj().Pkg() != nil && namedType.Obj().Pkg() != pkg.Types { // Check if it's from another package
+						structName := namedType.String() // Full qualified name (e.g., "context.Context")
+						if _, exists := usedImportedStructs[structName]; !exists {
+							usedImportedStructs[structName] = &ourtypes.StructInfo{Name: structName}
+						}
+					}
+				}
+			}
+			return true
 		default:
-			return true // Continue traversal for other nodes
+			return true
 		}
 
 		if typeExpr == nil {
-			return true // No type expression found for this node type or it's not a relevant node
+			return true
 		}
 
-		// Handle pointer types: *pkg.StructName
+		// Dereference pointer if applicable
 		if starExpr, ok := typeExpr.(*ast.StarExpr); ok {
 			typeExpr = starExpr.X
 		}
 
-		// Check if the type expression is a selector expression (pkg.StructName)
 		if selExpr, ok := typeExpr.(*ast.SelectorExpr); ok {
-			if ident, ok := selExpr.X.(*ast.Ident); ok {
-				// Check if the identifier is an imported package
-				if _, isImported := importMap[ident.Name]; isImported {
-					structName := fmt.Sprintf("%s.%s", ident.Name, selExpr.Sel.Name)
-					if _, exists := usedStructs[structName]; !exists {
-						usedStructs[structName] = &types.StructInfo{Name: structName}
+			if obj := pkg.TypesInfo.Uses[selExpr.Sel]; obj != nil { // Check if the selector refers to a type
+				if namedType, ok := obj.Type().(*gotypes.Named); ok {
+					if namedType.Obj().Pkg() != nil && namedType.Obj().Pkg() != pkg.Types { // Check if it's from another package
+						structName := namedType.String() // Full qualified name (e.g., "context.Context")
+						if _, exists := usedImportedStructs[structName]; !exists {
+							usedImportedStructs[structName] = &ourtypes.StructInfo{Name: structName}
+						}
 					}
 				}
 			}
@@ -293,8 +261,8 @@ func (p *FileParser) ExtractUsedImportedStructInfo(file *ast.File) []*types.Stru
 		return true
 	})
 
-	result := make([]*types.StructInfo, 0, len(usedStructs))
-	for _, s := range usedStructs {
+	result := make([]*ourtypes.StructInfo, 0, len(usedImportedStructs))
+	for _, s := range usedImportedStructs {
 		result = append(result, s)
 	}
 	return result
