@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vlad/ast2llm-go/internal/types"
 )
 
 func TestParseFile(t *testing.T) {
@@ -213,45 +214,104 @@ func TestExtractStructsWithComments(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected []string
+		expected []*types.StructInfo
 	}{
 		{
-			name: "struct with doc comment",
+			name: "struct with doc comment, fields, and methods",
 			input: `package main
+
+import (
+	"fmt"
+)
 
 // MyStruct represents a sample structure.
 type MyStruct struct {
 	Field1 string
+	Count  int
+}
+
+// Greet says hello.
+func (m *MyStruct) Greet() string {
+	return fmt.Sprintf("Hello, %s!", m.Field1)
+}
+
+// GetCount returns the count.
+func (m MyStruct) GetCount(multiplier int) (int, error) {
+	return m.Count * multiplier, nil
 }
 `,
-			expected: []string{"MyStruct: MyStruct represents a sample structure."},
+			expected: []*types.StructInfo{
+				{
+					Name:    "MyStruct",
+					Comment: "MyStruct represents a sample structure.",
+					Fields: []*types.StructField{
+						{Name: "Field1", Type: "string"},
+						{Name: "Count", Type: "int"},
+					},
+					Methods: []*types.StructMethod{
+						{Name: "Greet", Comment: "Greet says hello.", Parameters: []string{}, ReturnTypes: []string{"string"}},
+						{Name: "GetCount", Comment: "GetCount returns the count.", Parameters: []string{"int"}, ReturnTypes: []string{"int", "error"}},
+					},
+				},
+			},
 		},
 		{
-			name: "struct without comment",
+			name: "struct without comment, with fields, no methods",
 			input: `package main
 
 type AnotherStruct struct {
 	Field2 int
+	Name   string
 }
 `,
-			expected: []string{"AnotherStruct"},
+			expected: []*types.StructInfo{
+				{
+					Name:    "AnotherStruct",
+					Comment: "",
+					Fields: []*types.StructField{
+						{Name: "Field2", Type: "int"},
+						{Name: "Name", Type: "string"},
+					},
+					Methods: []*types.StructMethod{},
+				},
+			},
 		},
 		{
-			name: "multiple structs",
+			name: "multiple structs with varying details",
 			input: `package main
 
 // StructOne is the first struct.
 type StructOne struct {}
 
-type StructTwo struct {}
+// DoSomething performs an action.
+func (s StructOne) DoSomething() {}
 
-// StructThree is the third struct.
-type StructThree struct {}
+type StructTwo struct {
+	ID int
+}
+
+// GetID returns the ID.
+func (s StructTwo) GetID() int { return s.ID }
 `,
-			expected: []string{
-				"StructOne: StructOne is the first struct.",
-				"StructTwo",
-				"StructThree: StructThree is the third struct.",
+			expected: []*types.StructInfo{
+				{
+					Name:    "StructOne",
+					Comment: "StructOne is the first struct.",
+					Fields:  []*types.StructField{},
+					Methods: []*types.StructMethod{
+						{Name: "DoSomething", Comment: "DoSomething performs an action.", Parameters: []string{}, ReturnTypes: []string{}},
+					},
+				},
+				{
+					Name:    "StructTwo",
+					Comment: "",
+					Fields: []*types.StructField{
+						{Name: "ID", Type: "int"},
+					},
+					Methods: []*types.StructMethod{
+						{Name: "GetID", Comment: "GetID returns the ID.", Parameters: []string{}, ReturnTypes: []string{"int"}},
+					},
+				},
 			},
 		},
 		{
@@ -260,17 +320,7 @@ type StructThree struct {}
 
 func main() {}
 `,
-			expected: []string{},
-		},
-		{
-			name: "struct with inline comment (not doc comment)",
-			input: `package main
-
-type InlineCommentStruct struct { // This is an inline comment
-	Field string
-}
-`,
-			expected: []string{"InlineCommentStruct"},
+			expected: []*types.StructInfo{},
 		},
 	}
 
@@ -280,8 +330,8 @@ type InlineCommentStruct struct { // This is an inline comment
 			file, err := p.Parse("test.go", []byte(tt.input))
 			assert.NoError(t, err)
 
-			structs := p.ExtractStructsWithComments(file)
-			assert.ElementsMatch(t, tt.expected, structs)
+			structs := p.ExtractLocalStructInfo(file)
+			assert.ElementsMatch(t, tt.expected, structs, fmt.Sprintf("Failed for case %v", tt.name))
 		})
 	}
 }
@@ -294,7 +344,7 @@ func TestExtractUsedImportedStructs(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected []string
+		expected []*types.StructInfo
 	}{
 		{
 			name: "direct import usage",
@@ -309,7 +359,9 @@ func main() {
 	_ = myCtx
 }
 `,
-			expected: []string{"context.Context"},
+			expected: []*types.StructInfo{
+				{Name: "context.Context"},
+			},
 		},
 		{
 			name: "import usage in slice",
@@ -324,7 +376,9 @@ func main() {
 	_ = myCtxs
 }
 `,
-			expected: []string{"context.Context"},
+			expected: []*types.StructInfo{
+				{Name: "context.Context"},
+			},
 		},
 		{
 			name: "aliased import usage",
@@ -339,7 +393,9 @@ func main() {
 	_ = anotherCtx
 }
 `,
-			expected: []string{"myctx.Context"},
+			expected: []*types.StructInfo{
+				{Name: "myctx.Context"},
+			},
 		},
 		{
 			name: "multiple imported struct usages",
@@ -358,7 +414,10 @@ func main() {
 	fmt.Println(client, req, reader)
 }
 `,
-			expected: []string{"http.Client", "http.Request", "io.Reader", "fmt.Println"},
+			expected: []*types.StructInfo{
+				{Name: "http.Client"},
+				{Name: "http.Request"},
+			},
 		},
 		{
 			name: "no imported struct usage",
@@ -366,7 +425,7 @@ func main() {
 
 func main() {}
 `,
-			expected: []string{},
+			expected: []*types.StructInfo{},
 		},
 		{
 			name: "struct declaration without usage",
@@ -380,7 +439,9 @@ type MyCustomStruct struct {
 	Ctx context.Context
 }
 `,
-			expected: []string{"context.Context"},
+			expected: []*types.StructInfo{
+				{Name: "context.Context"},
+			},
 		},
 		{
 			name: "struct literal instantiation",
@@ -395,7 +456,9 @@ func main() {
 	_ = wg
 }
 `,
-			expected: []string{"sync.WaitGroup"},
+			expected: []*types.StructInfo{
+				{Name: "sync.WaitGroup"},
+			},
 		},
 		{
 			name: "variable declaration with imported type",
@@ -410,7 +473,9 @@ func main() {
 	_ = t
 }
 `,
-			expected: []string{"time.Time"},
+			expected: []*types.StructInfo{
+				{Name: "time.Time"},
+			},
 		},
 	}
 
@@ -420,7 +485,7 @@ func main() {
 			file, err := p.Parse("test.go", []byte(tt.input))
 			assert.NoError(t, err)
 
-			usedStructs := p.ExtractUsedImportedStructs(file)
+			usedStructs := p.ExtractUsedImportedStructInfo(file)
 			assert.ElementsMatch(t, tt.expected, usedStructs, fmt.Sprintf("Failed for case %v", tt.name))
 		})
 	}
