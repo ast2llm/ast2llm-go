@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/vlad/ast2llm-go/internal/composer"
 	"github.com/vlad/ast2llm-go/internal/parser"
 )
 
@@ -19,9 +20,13 @@ type ParseGoArgs struct {
 func NewParseGoTool() mcp.Tool {
 	return mcp.NewTool("parse_go",
 		mcp.WithDescription("Parse Go project and return its detailed information"),
-		mcp.WithString("filePath",
+		mcp.WithString("projectPath",
 			mcp.Required(),
 			mcp.Description("Path to the Go project"),
+		),
+		mcp.WithString("filePath",
+			mcp.Required(),
+			mcp.Description("Path to the current file"),
 		),
 	)
 }
@@ -29,22 +34,39 @@ func NewParseGoTool() mcp.Tool {
 // ParseGoToolHandler returns a handler for the parse_go tool
 func ParseGoToolHandler(p *parser.ProjectParser) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		projectPath, err := request.RequireString("filePath")
+		projectPath, err := request.RequireString("projectPath")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		fileInfo, err := p.ParseProject(projectPath)
+		filePath, err := request.RequireString("filePath")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		projectInfo, err := p.ParseProject(projectPath)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to parse project: %v", err)), nil
 		}
 
-		fileInfoJSON, err := json.Marshal(fileInfo)
+		fileInfo, ok := projectInfo[filePath]
+		if !ok {
+			return mcp.NewToolResultError(fmt.Sprintf("File %s not exists in project %s", filePath, projectPath)), nil
+		}
+
+		projectComposer := composer.New(projectInfo)
+
+		info, err := projectComposer.Compose(filePath)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal project info: %v", err)), nil
 		}
 
-		return mcp.NewToolResultText(string(fileInfoJSON)), nil
+		_, err = json.Marshal(fileInfo)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal project info: %v", err)), nil
+		}
+
+		return mcp.NewToolResultText(info), nil
 	}
 }
 
