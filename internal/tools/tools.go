@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -10,11 +9,6 @@ import (
 	"github.com/vlad/ast2llm-go/internal/composer"
 	"github.com/vlad/ast2llm-go/internal/parser"
 )
-
-// ParseGoArgs defines arguments for the parse_go tool
-type ParseGoArgs struct {
-	FilePath string `json:"filePath" jsonschema:"required,description=Path to the Go project"`
-}
 
 // NewParseGoTool returns the mcp.Tool for parsing Go code
 func NewParseGoTool() mcp.Tool {
@@ -49,21 +43,12 @@ func ParseGoToolHandler(p *parser.ProjectParser) func(context.Context, mcp.CallT
 			return mcp.NewToolResultError(fmt.Sprintf("failed to parse project: %v", err)), nil
 		}
 
-		fileInfo, ok := projectInfo[filePath]
-		if !ok {
-			return mcp.NewToolResultError(fmt.Sprintf("File %s not exists in project %s", filePath, projectPath)), nil
-		}
-
+		fullFilePath := fmt.Sprintf("%s/%s", projectPath, filePath)
 		projectComposer := composer.New(projectInfo)
 
-		info, err := projectComposer.Compose(filePath)
+		info, err := projectComposer.Compose(fullFilePath)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal project info: %v", err)), nil
-		}
-
-		_, err = json.Marshal(fileInfo)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal project info: %v", err)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to compose project info: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(info), nil
