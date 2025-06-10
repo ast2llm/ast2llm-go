@@ -58,12 +58,23 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 
 	if len(fileInfo.UsedImportedStructs) > 0 {
 		builder.WriteString("Used Imported Structs (from this project, if available):\n")
+		// Create a map to easily look up all local structs by their fully qualified names
+		projectStructsMap := make(map[string]*ourtypes.StructInfo)
+		for _, info := range p.projectInfo {
+			for _, s := range info.Structs {
+				projectStructsMap[s.Name] = s
+			}
+		}
+
 		for _, s := range fileInfo.UsedImportedStructs {
-			builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
-			// Note: Currently, only the name of the imported struct is available here.
-			// To provide full details for imported structs defined within the same project,
-			// the `ProjectParser` would need to store all local structs by their fully qualified names,
-			// and potentially provide a lookup mechanism across the entire project\'s struct definitions.
+			// s.Name is already the fully qualified name (e.g., "github.com/vlad/ast2llm-go/internal/types.FileInfo")
+			if detailedStruct, ok := projectStructsMap[s.Name]; ok {
+				// Found a detailed definition within the project
+				p.formatStruct(&builder, detailedStruct, "  ")
+			} else {
+				// External imported struct, or not found within the project's parsed info
+				builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
+			}
 		}
 		builder.WriteString("\n")
 	}
