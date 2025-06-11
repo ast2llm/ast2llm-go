@@ -1,6 +1,6 @@
 # AST2LLM for Go 
 
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Build](https://img.shields.io/badge/Build-Passing-brightgreen)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Build](https://img.shields.io/badge/Build-Passing-brightgreen)](LICENSE) [![Build Status](https://github.com/vprud/ast2llm-go/actions/workflows/go.yml/badge.svg)](https://github.com/vprud/ast2llm-go/actions/workflows/go.yml)
 
 **Local AST-powered context enhancement tool for LLM**  
 

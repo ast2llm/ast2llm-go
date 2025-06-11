@@ -1,0 +1,108 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Run unit tests
+      run: go test -v ./...
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.58
+        args: --timeout=5m
+
+    - name: Build binaries
+      if: github.event_name != 'pull_request'
+      run: |
+        PROJECT_NAME="ast2llm-go"
+        BUILD_DIR="./build"
+        mkdir -p $BUILD_DIR
+
+        PLATFORMS="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
+
+        for platform in $PLATFORMS;
+        do
+          GOOS=$(echo $platform | cut -d'/' -f1)
+          GOARCH=$(echo $platform | cut -d'/' -f2)
+          OUTPUT_NAME="$PROJECT_NAME-$GOOS-$GOARCH"
+          if [ "$GOOS" == "windows" ]; then
+            OUTPUT_NAME+=".exe"
+          fi
+
+          echo "Building $OUTPUT_NAME for $GOOS/$GOARCH"
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $BUILD_DIR/$OUTPUT_NAME
+        done
+
+    - name: Install UPX
+      if: github.event_name != 'pull_request'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y upx-ucl
+
+    - name: Compress binaries with UPX
+      if: github.event_name != 'pull_request'
+      run: |
+        BUILD_DIR="./build"
+        find $BUILD_DIR -type f -exec upx {} \;
+
+    - name: Upload artifacts
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries
+        path: ./build/
+
+    - name: Get latest release tag
+      id: get_latest_release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      run: |
+        echo "Retrieving latest release tag..."
+        LATEST_TAG=$(gh release view --json tagName -q .tagName || echo "")
+        echo "Latest tag: $LATEST_TAG"
+        echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ format('{0}{1}{2}-{3}', github.run_number, github.run_id, github.run_attempt, github.sha) }}
+        name: Release v${{ format('{0}{1}{2}-{3}', github.run_number, github.run_id, github.run_attempt, github.sha) }}
+        draft: false
+        prerelease: false
+        files: | 
+          ./build/*
+        generate_release_notes: true
+        # The user requested to generate release notes with commits since the previous release. 
+        # This requires the gh cli, and the github_token for access
+        body: |
+          Changes since last release (${{ steps.get_latest_release.outputs.latest_tag }}):
+          ```
+          $(git log ${{ steps.get_latest_release.outputs.latest_tag }}..HEAD --pretty=format:"* %h %s (%an)")
+          ```
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
