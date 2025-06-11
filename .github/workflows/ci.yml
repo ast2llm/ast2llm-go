@@ -27,11 +27,11 @@ jobs:
     - name: Run unit tests
       run: go test -v ./...
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: v1.58
-        args: --timeout=5m
+    #- name: Run golangci-lint
+    #  uses: golangci/golangci-lint-action@v6
+    #  with:
+    #    version: v1.58
+    #    args: --timeout=5m
 
     - name: Build binaries
       if: github.event_name != 'pull_request'

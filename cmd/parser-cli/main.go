@@ -89,7 +89,9 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	// Start progress bar
 	go func() {
 		for {
-			_ = bar.Add(1) // Ignoring error as it's a progress bar
+			if err = bar.Add(1); err != nil {
+				panic(err)
+			}
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
@@ -97,14 +99,17 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	// Parse project
 	fileInfos, err := p.ParseProject(absPath)
 	if err != nil {
-		_ = bar.Finish() // Ignoring error as it's a progress bar
+		if err = bar.Finish(); err != nil {
+			panic(err)
+		}
 		color.Red("Error parsing project: %v", err)
 		return
 	}
 
 	// Stop progress bar
-	_ = bar.Finish() // Ignoring error as it's a progress bar
-
+	if err = bar.Finish(); err != nil {
+		panic(err)
+	}
 	// Cache the result
 	fileInfoCacheLock.Lock()
 	fileInfoCache[absPath] = fileInfos
