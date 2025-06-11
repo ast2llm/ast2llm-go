@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/schollz/progressbar/v3"
+	pb "github.com/schollz/progressbar/v3"
 	"github.com/vlad/ast2llm-go/internal/parser"
 	ourtypes "github.com/vlad/ast2llm-go/internal/types" // Alias ourtypes
 )
@@ -62,7 +62,11 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	if cached, ok := fileInfoCache[absPath]; ok {
 		fileInfoCacheLock.RUnlock()
 		if jsonOut {
-			json.NewEncoder(os.Stdout).Encode(cached)
+			err = json.NewEncoder(os.Stdout).Encode(cached)
+			if err != nil {
+				color.Red("Error encoding JSON: %v", err)
+				return
+			}
 		} else {
 			printProjectFileInfo(cached)
 		}
@@ -71,10 +75,10 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	fileInfoCacheLock.RUnlock()
 
 	// Create progress bar
-	bar := progressbar.NewOptions(-1,
-		progressbar.OptionSetDescription("Analyzing project..."),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetTheme(progressbar.Theme{
+	bar := pb.NewOptions(-1,
+		pb.OptionSetDescription("Analyzing project..."),
+		pb.OptionShowCount(),
+		pb.OptionSetTheme(pb.Theme{
 			Saucer:        "=",
 			SaucerHead:    ">",
 			SaucerPadding: " ",
@@ -85,7 +89,7 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	// Start progress bar
 	go func() {
 		for {
-			bar.Add(1)
+			_ = bar.Add(1) // Ignoring error as it's a progress bar
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
@@ -93,13 +97,13 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	// Parse project
 	fileInfos, err := p.ParseProject(absPath)
 	if err != nil {
-		bar.Finish()
+		_ = bar.Finish() // Ignoring error as it's a progress bar
 		color.Red("Error parsing project: %v", err)
 		return
 	}
 
 	// Stop progress bar
-	bar.Finish()
+	_ = bar.Finish() // Ignoring error as it's a progress bar
 
 	// Cache the result
 	fileInfoCacheLock.Lock()
@@ -115,7 +119,10 @@ func analyzeProject(p *parser.ProjectParser, path string, jsonOut bool) {
 	}()
 
 	if jsonOut {
-		json.NewEncoder(os.Stdout).Encode(fileInfos)
+		err = json.NewEncoder(os.Stdout).Encode(fileInfos)
+		if err != nil {
+			color.Red("Error encoding JSON: %v", err)
+		}
 	} else {
 		printProjectFileInfo(fileInfos)
 	}
