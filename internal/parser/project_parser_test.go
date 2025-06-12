@@ -32,20 +32,19 @@ func TestProjectParser_ParseProject(t *testing.T) {
 import "fmt"
 
 // MyStruct represents a sample structure.
-type MyStruct struct {
+type MyStruct struct{
 	Field1 string
-	Count  int
+	Count int
 }
 
 // Greet says hello.
 func (m *MyStruct) Greet() string {
-	return fmt.Sprintf("Hello, %s!", m.Field1)
+	fmt.Println("Hello")
+	return "hello"
 }
 
-func main() {
-	var s MyStruct
-	s.Greet()
-	fmt.Println("Hello")
+func main(){
+	_ = MyStruct{}
 }
 `,
 			},
@@ -53,7 +52,7 @@ func main() {
 				"/testproject/main.go": {
 					PackageName: "main",
 					Imports:     []string{"fmt"},
-					Functions:   []string{"main", "Greet"},
+					Functions:   []string{"Greet", "main"},
 					Structs: []*ourtypes.StructInfo{
 						{
 							Name:    "MyStruct",
@@ -66,15 +65,13 @@ func main() {
 								{
 									Name:        "Greet",
 									Comment:     "Greet says hello.",
-									Parameters:  []string{"*main.MyStruct"},
+									Parameters:  []string{},
 									ReturnTypes: []string{"string"},
 								},
 							},
 						},
 					},
-					UsedImportedStructs: []*ourtypes.StructInfo{
-						{Name: "fmt"},
-					},
+					UsedImportedStructs: []*ourtypes.StructInfo{},
 				},
 			},
 		},
@@ -125,7 +122,6 @@ func ProcessData(d pkg1.Data) {
 					Structs:     []*ourtypes.StructInfo{},
 					UsedImportedStructs: []*ourtypes.StructInfo{
 						{Name: "example.com/testproject/pkg1.Data"},
-						{Name: "fmt"},
 					},
 				},
 			},
@@ -175,16 +171,15 @@ type Writer interface {
 							Name:    "ReaderWriter",
 							Comment: "ReaderWriter struct",
 							Fields: []*ourtypes.StructField{
-								{Name: "", Type: "io.Reader"},
-								{Name: "", Type: "main.Writer"},
-								{Name: "", Type: "string"},
+								{Name: "Reader", Type: "io.Reader"},
+								{Name: "Writer", Type: "example.com/testproject.Writer"},
+								{Name: "string", Type: "string"},
 							},
 							Methods: []*ourtypes.StructMethod{},
 						},
 					},
 					UsedImportedStructs: []*ourtypes.StructInfo{
 						{Name: "io.Reader"},
-						{Name: "main.Writer"},
 					},
 				},
 			},

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vlad/ast2llm-go/internal/parser"
-	ourtypes "github.com/vlad/ast2llm-go/internal/types" // Alias ourtypes
+	// Alias ourtypes
 )
 
 func TestNewParseGoTool(t *testing.T) {
@@ -27,11 +27,11 @@ func TestNewParseGoTool(t *testing.T) {
 	b, err := json.Marshal(tool)
 	require.NoError(t, err)
 	js := string(b)
+	assert.Contains(t, js, "projectPath")
 	assert.Contains(t, js, "filePath")
-	assert.NotContains(t, js, "sourceCode") // sourceCode is removed
 	assert.Contains(t, js, "Path to the Go project")
-	assert.NotContains(t, js, "Path to the Go file") // Description changed
-	assert.NotContains(t, js, "Raw Go code")         // Raw Go code is removed
+	assert.Contains(t, js, "Path to the current file")
+	assert.NotContains(t, js, "Raw Go code")
 }
 
 func TestParseGoToolHandler(t *testing.T) {
@@ -44,7 +44,18 @@ func TestParseGoToolHandler(t *testing.T) {
 	err := os.MkdirAll(projectPath, 0755)
 	require.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(projectPath, "main.go"), []byte("package main\nfunc main(){}\n"), 0644)
+	err = os.WriteFile(filepath.Join(projectPath, "main.go"), []byte(`package main
+
+import "fmt"
+
+// MyStruct is a simple struct
+type MyStruct struct{}
+
+func main(){
+	fmt.Println("Hello")
+	_ = MyStruct{}
+}
+`), 0644)
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(projectPath, "go.mod"), []byte(fmt.Sprintf("module %s\ngo 1.21\n", "example.com/testproject_tools")), 0644)
 	require.NoError(t, err)
@@ -66,7 +77,8 @@ func TestParseGoToolHandler(t *testing.T) {
 		{
 			name: "valid request",
 			args: map[string]any{
-				"filePath": projectPath,
+				"projectPath": projectPath,
+				"filePath":    "main.go",
 			},
 			wantErr: false,
 		},
@@ -74,15 +86,16 @@ func TestParseGoToolHandler(t *testing.T) {
 			name:        "missing filePath",
 			args:        map[string]any{},
 			wantErr:     true,
-			errContains: "filePath",
+			errContains: "projectPath",
 		},
 		{
 			name: "invalid project path",
 			args: map[string]any{
-				"filePath": "/non/existent/path",
+				"projectPath": "/non/existent/path",
+				"filePath":    "main.go",
 			},
 			wantErr:     true,
-			errContains: "no packages found",
+			errContains: "failed to parse project",
 		},
 	}
 
@@ -109,18 +122,12 @@ func TestParseGoToolHandler(t *testing.T) {
 			assert.NotEmpty(t, result.Content)
 
 			// Verify the content is a JSON string representing FileInfo map
-			jsonContent := result.Content[0].(mcp.TextContent).Text
-			assert.True(t, json.Valid([]byte(jsonContent)), "Invalid JSON: %s", jsonContent)
-
-			var parsedFileInfos map[string]*ourtypes.FileInfo
-			err = json.Unmarshal([]byte(jsonContent), &parsedFileInfos)
-			require.NoError(t, err, "Failed to unmarshal JSON content")
-
-			// Basic check for the parsed content. Detailed checks are in parser_test.
-			assert.Contains(t, jsonContent, "\"main.go\"")
-			assert.Contains(t, jsonContent, "\"PackageName\":\"main\"")
-			assert.Contains(t, jsonContent, "\"Functions\":[\"main\"]")
-			assert.Contains(t, jsonContent, "\"Structs\":[]")
+			composedOutput := result.Content[0].(mcp.TextContent).Text
+			assert.Contains(t, composedOutput, "--- File: "+filepath.Join(projectPath, "main.go")+" ---")
+			assert.Contains(t, composedOutput, "Package: main")
+			assert.Contains(t, composedOutput, "Functions:\n- main")
+			assert.Contains(t, composedOutput, "Local Structs:\n  Struct: MyStruct")
+			assert.NotContains(t, composedOutput, "Used Imported Structs (from this project, if available):\n- fmt")
 		})
 	}
 }
@@ -158,7 +165,8 @@ func TestRegisterTools(t *testing.T) {
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
-				"filePath": projectPath,
+				"projectPath": projectPath,
+				"filePath":    "main.go",
 			},
 		},
 	}
@@ -168,7 +176,9 @@ func TestRegisterTools(t *testing.T) {
 	require.NotNil(t, result)
 	assert.False(t, result.IsError)
 	assert.NotEmpty(t, result.Content)
-	jsonContent := result.Content[0].(mcp.TextContent).Text
-	assert.True(t, json.Valid([]byte(jsonContent)), "Invalid JSON: %s", jsonContent)
-	assert.Contains(t, jsonContent, "\"PackageName\":\"main\"")
+	composedOutput := result.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, composedOutput, "Package: main")
+	assert.Contains(t, composedOutput, "Functions:\n- init")
+	assert.NotContains(t, composedOutput, "Local Structs:\n  Struct:")
+	assert.NotContains(t, composedOutput, "Used Imported Structs (from this project, if available):\n")
 }

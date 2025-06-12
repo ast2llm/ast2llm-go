@@ -134,7 +134,7 @@ func TestEnhancePromptHandler(t *testing.T) {
 			assert.Equal(t, mcp.Role("system"), systemMsg.Role)
 			textContent, ok := systemMsg.Content.(mcp.TextContent)
 			require.True(t, ok)
-			assert.Contains(t, textContent.Text, "Go project code enhancement assistant")
+			assert.Equal(t, "You are a Go code enhancement assistant. Your task is to improve the provided Go project code by adding better documentation, error handling, and following best practices.", textContent.Text)
 
 			// Verify user message with project info
 			userMsg := result.Messages[1]

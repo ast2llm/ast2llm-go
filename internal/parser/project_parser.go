@@ -97,10 +97,8 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 				}
 			}
 		} else if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			// Check if it's a standalone function (not a method)
-			if funcDecl.Recv == nil {
-				fileInfo.Functions = append(fileInfo.Functions, funcDecl.Name.Name)
-			}
+			// Functions and methods are added to fileInfo.Functions
+			fileInfo.Functions = append(fileInfo.Functions, funcDecl.Name.Name)
 		}
 		return true
 	})
@@ -119,7 +117,7 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 // extractDetailedStructInfo extracts comprehensive details about a struct
 func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType *gotypes.Named, structType *gotypes.Struct, pkg *packages.Package, targetFile *ast.File) *ourtypes.StructInfo {
 	structInfo := ourtypes.NewStructInfo()
-	structInfo.Name = namedType.String()
+	structInfo.Name = obj.Name()
 
 	// Extract struct comment (requires traversing AST nodes directly within the target file)
 	structComment := ""
