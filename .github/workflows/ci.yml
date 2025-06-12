@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating and updating releases
+      actions: write # Required for creating GitHub releases
 
     steps:
     - name: Checkout code
@@ -52,7 +55,7 @@ jobs:
           fi
 
           echo "Building $OUTPUT_NAME for $GOOS/$GOARCH"
-          env GOOS=$GOOS GOARCH=$GOARCH go build -o $BUILD_DIR/$OUTPUT_NAME
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $BUILD_DIR/$OUTPUT_NAME ./cmd/server
         done
 
     - name: Install UPX
@@ -76,7 +79,7 @@ jobs:
 
     - name: Get latest release tag
       id: get_latest_release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         echo "Retrieving latest release tag..."
         LATEST_TAG=$(gh release view --json tagName -q .tagName || echo "")
@@ -86,7 +89,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ format('{0}{1}{2}-{3}', github.run_number, github.run_id, github.run_attempt, github.sha) }}
