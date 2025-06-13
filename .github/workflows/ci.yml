@@ -88,15 +88,45 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Generate changelog
+      id: generate_changelog
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        LAST_RELEASE_TAG="${{ steps.get_latest_release.outputs.latest_tag }}"
+        CHANGELOG_CONTENT=""
+
+        if [ -z "$LAST_RELEASE_TAG" ]; then
+          echo "No previous release tag found. Generating changelog from current HEAD."
+          CHANGELOG_CONTENT=$(git log HEAD --pretty=format:'* %h %s (%an)')
+        else
+          echo "Previous release tag found: $LAST_RELEASE_TAG. Generating changelog since last release."
+          CHANGELOG_CONTENT=$(git log "$LAST_RELEASE_TAG"..HEAD --pretty=format:'* %h %s (%an)')
+        fi
+
+        # Escape newlines for multi-line output
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Generate release tag and name
+      id: generate_release_info
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        COMMIT_DATE=$(date -d "${{ github.event.head_commit.timestamp }}" +%Y%m%d)
+        FULL_SHA="${{ github.sha }}"
+        LAST_FOUR_SHA="${FULL_SHA: -4}"
+        echo "formatted_date=$COMMIT_DATE" >> "$GITHUB_OUTPUT"
+        echo "short_sha=$LAST_FOUR_SHA" >> "$GITHUB_OUTPUT"
+
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v${{ format('{0}{1}{2}-{3}', github.run_number, github.run_id, github.run_attempt, github.sha) }}
-        name: Release v${{ format('{0}{1}{2}-{3}', github.run_number, github.run_id, github.run_attempt, github.sha) }}
+        tag_name: v${{ steps.generate_release_info.outputs.formatted_date }}-${{ steps.generate_release_info.outputs.short_sha }}
+        name: Release v${{ steps.generate_release_info.outputs.formatted_date }}-${{ steps.generate_release_info.outputs.short_sha }}
         draft: false
         prerelease: false
-        files: | 
+        files: |
           ./build/*
         generate_release_notes: true
         # The user requested to generate release notes with commits since the previous release. 
@@ -104,7 +134,7 @@ jobs:
         body: |
           Changes since last release (${{ steps.get_latest_release.outputs.latest_tag }}):
           ```
-          $(git log ${{ steps.get_latest_release.outputs.latest_tag }}..HEAD --pretty=format:"* %h %s (%an)")
+          ${{ steps.generate_changelog.outputs.changelog }}
           ```
         make_latest: true
       env:
