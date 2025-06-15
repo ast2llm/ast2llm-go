@@ -1,6 +1,6 @@
 # AST2LLM for Go 
 
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Build](https://img.shields.io/badge/Build-Passing-brightgreen)](LICENSE) [![Build Status](https://github.com/vprud/ast2llm-go/actions/workflows/go.yml/badge.svg)](https://github.com/vprud/ast2llm-go/actions/workflows/go.yml)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Build](https://img.shields.io/badge/Build-Passing-brightgreen)](LICENSE) [![Build Status](https://github.com/vprud/ast2llm-go/actions/workflows/ci.yml/badge.svg)](https://github.com/vprud/ast2llm-go/actions/workflows/ci.yml)
 
 **Local AST-powered context enhancement tool for LLM**  
 
@@ -27,37 +27,46 @@ Used Imported Structs (from this project, if available):
 
 ## Requirements
 
-- Go 1.24 or higher (if building from source)
+- Go 1.22 or higher (if building from source)
 - Supported MCP client (Cursor, Claude, VS Code, etc.)
 
 ## Installation
 
 ### Binaries
 
-Download the latest release:
+To install `ast2llm-go` on your system, run the following command in your terminal:
 
 ```bash
-curl -L https://github.com/vlad/ast2llm-go/releases/latest/download/ast2llm-go -o /usr/local/bin/ast2llm-go
-chmod +x /usr/local/bin/ast2llm-go
+curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh
 ```
 
-### Source Code
+This script will automatically detect your OS and architecture, download the appropriate binary, and attempt to add it to your PATH. You can also specify an installation directory:
 
 ```bash
-git clone https://github.com/vlad/ast2llm-go.git
-cd ast2llm-go
-make build
+curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh -s -- --install-dir /usr/local/bin
 ```
 
-### Docker
+### Self-Update
+
+To update `ast2llm-go` to the latest version, simply re-run the installation command:
 
 ```bash
-docker run -d --name ast2llm-go \
-  -v /path/to/your/code:/code \
-  ghcr.io/vlad/ast2llm-go
+curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh
 ```
+
+## Uninstallation
+
+To remove `ast2llm-go` from your system, run the uninstallation script:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/uninstall.sh | sh
+```
+
+This script will remove the binary, clean up PATH modifications, and delete related configuration files. You may need to restart your shell after uninstallation.
 
 ## Setup in Clients
+
+After installation `ast2llm-go`, you need to restart the IDE.
 
 ### Cursor
 
@@ -67,7 +76,7 @@ Add to your `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "go-ast": {
-      "command": "/path/to/ast2llm-go",
+      "command": "ast2llm-go",
       "args": []
     }
   }  
@@ -82,7 +91,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "go-ast": {
-      "command": "/path/to/ast2llm-go"
+      "command": "ast2llm-go"
     }
   }
 }
@@ -97,29 +106,7 @@ Add to your VS Code MCP config:
   "servers": {
     "go-ast": {
       "type": "stdio",
-      "command": "/path/to/ast2llm-go"
-    }
-  }
-}
-```
-
-### Using Docker
-
-For clients that support Docker-based MCP servers:
-
-```json
-{
-  "mcpServers": {
-    "go-ast": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-v",
-        "/path/to/your/code:/code",
-        "ghcr.io/vlad/ast2llm-go"
-      ]
+      "command": "ast2llm-go"
     }
   }
 }
