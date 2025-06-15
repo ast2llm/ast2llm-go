@@ -55,7 +55,7 @@ func main(){
 					Functions:   []string{"Greet", "main"},
 					Structs: []*ourtypes.StructInfo{
 						{
-							Name:    "MyStruct",
+							Name:    "example.com/testproject.MyStruct",
 							Comment: "MyStruct represents a sample structure.",
 							Fields: []*ourtypes.StructField{
 								{Name: "Field1", Type: "string"},
@@ -105,7 +105,7 @@ func ProcessData(d pkg1.Data) {
 					Functions:   []string{},
 					Structs: []*ourtypes.StructInfo{
 						{
-							Name:    "Data",
+							Name:    "example.com/testproject/pkg1.Data",
 							Comment: "Data struct",
 							Fields: []*ourtypes.StructField{
 								{Name: "Value", Type: "string"},
@@ -168,7 +168,7 @@ type Writer interface {
 					Functions:   []string{},
 					Structs: []*ourtypes.StructInfo{
 						{
-							Name:    "ReaderWriter",
+							Name:    "example.com/testproject.ReaderWriter",
 							Comment: "ReaderWriter struct",
 							Fields: []*ourtypes.StructField{
 								{Name: "Reader", Type: "io.Reader"},

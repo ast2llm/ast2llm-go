@@ -126,7 +126,7 @@ func main(){
 			assert.Contains(t, composedOutput, "--- File: "+filepath.Join(projectPath, "main.go")+" ---")
 			assert.Contains(t, composedOutput, "Package: main")
 			assert.Contains(t, composedOutput, "Functions:\n- main")
-			assert.Contains(t, composedOutput, "Local Structs:\n  Struct: MyStruct")
+			assert.Contains(t, composedOutput, "Local Structs:\n  Struct: example.com/testproject_tools.MyStruct")
 			assert.NotContains(t, composedOutput, "Used Imported Structs (from this project, if available):\n- fmt")
 		})
 	}
