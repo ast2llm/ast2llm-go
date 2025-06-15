@@ -150,7 +150,7 @@ jobs:
         name: Release v${{ steps.generate_release_info.outputs.formatted_date }}-${{ steps.generate_release_info.outputs.short_sha }}
         draft: false
         prerelease: false
-        files: |
+        files: | 
           ./build/*
         generate_release_notes: true
         # The user requested to generate release notes with commits since the previous release. 

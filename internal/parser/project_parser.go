@@ -117,7 +117,7 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 // extractDetailedStructInfo extracts comprehensive details about a struct
 func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType *gotypes.Named, structType *gotypes.Struct, pkg *packages.Package, targetFile *ast.File) *ourtypes.StructInfo {
 	structInfo := ourtypes.NewStructInfo()
-	structInfo.Name = obj.Name()
+	structInfo.Name = namedType.String() // Use the fully qualified name
 
 	// Extract struct comment (requires traversing AST nodes directly within the target file)
 	structComment := ""

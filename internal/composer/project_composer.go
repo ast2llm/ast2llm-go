@@ -53,7 +53,6 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		for _, s := range fileInfo.Structs {
 			p.formatStruct(&builder, s, "  ")
 		}
-		builder.WriteString("\n")
 	}
 
 	if len(fileInfo.UsedImportedStructs) > 0 {
@@ -76,7 +75,6 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 				builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
 			}
 		}
-		builder.WriteString("\n")
 	}
 
 	return builder.String(), nil
