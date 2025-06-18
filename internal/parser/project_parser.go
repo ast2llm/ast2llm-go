@@ -77,7 +77,8 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 	}
 
 	// Extract functions and detailed struct info from this file
-	localStructsMap := make(map[string]*ourtypes.StructInfo) // To prevent duplicates for methods
+	localStructsMap := make(map[string]*ourtypes.StructInfo)       // To prevent duplicates for methods
+	localInterfacesMap := make(map[string]*ourtypes.InterfaceInfo) // To prevent duplicates for interfaces
 
 	// Iterate over the AST nodes of the current file to find declarations
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -91,6 +92,10 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 								// This is a struct definition within the current file
 								structInfo := p.extractDetailedStructInfo(obj, namedType, structType, pkg, file)
 								localStructsMap[structInfo.Name] = structInfo
+							} else if ifaceType, ok := namedType.Underlying().(*gotypes.Interface); ok {
+								// This is an interface definition within the current file
+								ifaceInfo := p.extractDetailedInterfaceInfo(obj, namedType, ifaceType, pkg, file)
+								localInterfacesMap[ifaceInfo.Name] = ifaceInfo
 							}
 						}
 					}
@@ -106,6 +111,11 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 	// Convert local structs map to slice
 	for _, sInfo := range localStructsMap {
 		fileInfo.Structs = append(fileInfo.Structs, sInfo)
+	}
+
+	// Convert local interfaces map to slice
+	for _, iInfo := range localInterfacesMap {
+		fileInfo.Interfaces = append(fileInfo.Interfaces, iInfo)
 	}
 
 	// Extract used imported structs from this file
@@ -188,6 +198,82 @@ func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType 
 	}
 
 	return structInfo
+}
+
+// extractDetailedInterfaceInfo extracts comprehensive details about an interface
+func (p *ProjectParser) extractDetailedInterfaceInfo(obj gotypes.Object, namedType *gotypes.Named, ifaceType *gotypes.Interface, pkg *packages.Package, targetFile *ast.File) *ourtypes.InterfaceInfo {
+	ifaceInfo := ourtypes.NewInterfaceInfo()
+	ifaceInfo.Name = namedType.String() // Use the fully qualified name
+
+	// Extract interface comment (requires traversing AST nodes directly within the target file)
+	ifaceComment := ""
+	pos := obj.Pos()
+	ast.Inspect(targetFile, func(n ast.Node) bool {
+		if genDecl, ok := n.(*ast.GenDecl); ok {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Pos() == pos {
+					if genDecl.Doc != nil {
+						ifaceComment = strings.TrimSpace(genDecl.Doc.Text())
+					} else if typeSpec.Doc != nil {
+						ifaceComment = strings.TrimSpace(typeSpec.Doc.Text())
+					}
+					return false // Found it, stop inspecting
+				}
+			}
+		}
+		return true
+	})
+	ifaceInfo.Comment = ifaceComment
+
+	// Extract methods (including those from embedded interfaces)
+	numMethods := ifaceType.NumExplicitMethods()
+	for i := 0; i < numMethods; i++ {
+		methodObj := ifaceType.ExplicitMethod(i)
+		sig := methodObj.Type().(*gotypes.Signature)
+
+		params := []string{}
+		if sig.Params() != nil {
+			for j := 0; j < sig.Params().Len(); j++ {
+				params = append(params, sig.Params().At(j).Type().String())
+			}
+		}
+
+		results := []string{}
+		if sig.Results() != nil {
+			for j := 0; j < sig.Results().Len(); j++ {
+				results = append(results, sig.Results().At(j).Type().String())
+			}
+		}
+
+		// Method comments also require mapping back to AST if not available directly from types.Object
+		methodComment := ""
+		methodPos := methodObj.Pos()
+		ast.Inspect(targetFile, func(n ast.Node) bool {
+			if funcDecl, ok := n.(*ast.FuncDecl); ok && funcDecl.Name.Pos() == methodPos {
+				if funcDecl.Doc != nil {
+					methodComment = strings.TrimSpace(funcDecl.Doc.Text())
+				}
+				return false // Found it, stop inspecting
+			}
+			return true
+		})
+
+		ifaceInfo.Methods = append(ifaceInfo.Methods, &ourtypes.InterfaceMethod{
+			Name:        methodObj.Name(),
+			Comment:     methodComment,
+			Parameters:  params,
+			ReturnTypes: results,
+		})
+	}
+
+	// Embedded interfaces
+	numEmbeddeds := ifaceType.NumEmbeddeds()
+	for i := 0; i < numEmbeddeds; i++ {
+		emb := ifaceType.EmbeddedType(i)
+		ifaceInfo.Embeddeds = append(ifaceInfo.Embeddeds, emb.String())
+	}
+
+	return ifaceInfo
 }
 
 // extractUsedImportedStructInfoFromFile extracts names of structs imported from other packages and used in the current file.

@@ -184,6 +184,62 @@ type Writer interface {
 				},
 			},
 		},
+		{
+			name: "file with interfaces, methods, and embedded interfaces",
+			projectFiles: map[string]string{
+				"iface.go": `package iface
+
+// Base interface
+// BaseIface does base things.
+type BaseIface interface {
+	BaseMethod(x int) error
+}
+
+// DerivedIface extends BaseIface and adds more methods.
+type DerivedIface interface {
+	BaseIface
+	DerivedMethod(y string) (int, error)
+}
+`,
+			},
+			expectedFileInfos: map[string]*ourtypes.FileInfo{
+				"/testproject/iface.go": {
+					PackageName: "iface",
+					Imports:     []string{},
+					Functions:   []string{},
+					Structs:     []*ourtypes.StructInfo{},
+					Interfaces: []*ourtypes.InterfaceInfo{
+						{
+							Name:    "example.com/testproject/iface.BaseIface",
+							Comment: "Base interface\nBaseIface does base things.",
+							Methods: []*ourtypes.InterfaceMethod{
+								{
+									Name:        "BaseMethod",
+									Comment:     "",
+									Parameters:  []string{"int"},
+									ReturnTypes: []string{"error"},
+								},
+							},
+							Embeddeds: []string{},
+						},
+						{
+							Name:    "example.com/testproject/iface.DerivedIface",
+							Comment: "DerivedIface extends BaseIface and adds more methods.",
+							Methods: []*ourtypes.InterfaceMethod{
+								{
+									Name:        "DerivedMethod",
+									Comment:     "",
+									Parameters:  []string{"string"},
+									ReturnTypes: []string{"int", "error"},
+								},
+							},
+							Embeddeds: []string{"example.com/testproject/iface.BaseIface"},
+						},
+					},
+					UsedImportedStructs: []*ourtypes.StructInfo{},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

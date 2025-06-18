@@ -55,23 +55,35 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		}
 	}
 
+	if len(fileInfo.Interfaces) > 0 {
+		builder.WriteString("Local Interfaces:\n")
+		for _, iface := range fileInfo.Interfaces {
+			p.FormatInterface(&builder, iface, "  ")
+		}
+	}
+
 	if len(fileInfo.UsedImportedStructs) > 0 {
 		builder.WriteString("Used Imported Structs (from this project, if available):\n")
-		// Create a map to easily look up all local structs by their fully qualified names
+		// Create a map to easily look up all local structs and interfaces by их fully qualified names
 		projectStructsMap := make(map[string]*ourtypes.StructInfo)
+		projectInterfacesMap := make(map[string]*ourtypes.InterfaceInfo)
 		for _, info := range p.projectInfo {
 			for _, s := range info.Structs {
 				projectStructsMap[s.Name] = s
 			}
+			for _, i := range info.Interfaces {
+				projectInterfacesMap[i.Name] = i
+			}
 		}
 
 		for _, s := range fileInfo.UsedImportedStructs {
-			// s.Name is already the fully qualified name (e.g., "github.com/vlad/ast2llm-go/internal/types.FileInfo")
+			// Структуры
 			if detailedStruct, ok := projectStructsMap[s.Name]; ok {
-				// Found a detailed definition within the project
 				p.formatStruct(&builder, detailedStruct, "  ")
+			} else if detailedIface, ok := projectInterfacesMap[s.Name]; ok {
+				p.FormatInterface(&builder, detailedIface, "  ")
 			} else {
-				// External imported struct, or not found within the project's parsed info
+				// Внешний импортированный тип, не найден в проекте
 				builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
 			}
 		}
@@ -97,6 +109,29 @@ func (p *ProjectComposer) formatStruct(builder *strings.Builder, s *ourtypes.Str
 	if len(s.Methods) > 0 {
 		builder.WriteString(fmt.Sprintf("%s  Methods:\n", indent))
 		for _, m := range s.Methods {
+			builder.WriteString(fmt.Sprintf("%s    - %s(%s) (%s)\n", indent, m.Name, strings.Join(m.Parameters, ", "), strings.Join(m.ReturnTypes, ", ")))
+			if m.Comment != "" {
+				builder.WriteString(fmt.Sprintf("%s      Comment: %s\n", indent, m.Comment))
+			}
+		}
+	}
+}
+
+// FormatInterface formats an InterfaceInfo into the StringBuilder.
+func (p *ProjectComposer) FormatInterface(builder *strings.Builder, iface *ourtypes.InterfaceInfo, indent string) {
+	builder.WriteString(fmt.Sprintf("%sInterface: %s\n", indent, iface.Name))
+	if iface.Comment != "" {
+		builder.WriteString(fmt.Sprintf("%s  Comment: %s\n", indent, iface.Comment))
+	}
+	if len(iface.Embeddeds) > 0 {
+		builder.WriteString(fmt.Sprintf("%s  Embeds:\n", indent))
+		for _, emb := range iface.Embeddeds {
+			builder.WriteString(fmt.Sprintf("%s    - %s\n", indent, emb))
+		}
+	}
+	if len(iface.Methods) > 0 {
+		builder.WriteString(fmt.Sprintf("%s  Methods:\n", indent))
+		for _, m := range iface.Methods {
 			builder.WriteString(fmt.Sprintf("%s    - %s(%s) (%s)\n", indent, m.Name, strings.Join(m.Parameters, ", "), strings.Join(m.ReturnTypes, ", ")))
 			if m.Comment != "" {
 				builder.WriteString(fmt.Sprintf("%s      Comment: %s\n", indent, m.Comment))

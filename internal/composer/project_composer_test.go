@@ -3,11 +3,13 @@ package composer_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vlad/ast2llm-go/internal/composer"
 	"github.com/vlad/ast2llm-go/internal/parser"
+	"github.com/vlad/ast2llm-go/internal/types"
 )
 
 func TestProjectComposer_Compose(t *testing.T) {
@@ -121,4 +123,85 @@ func NewMyPkgStruct(id, name string) *MyPkgStruct {
 	_, err = composer.Compose(filepath.Join(tmpDir, "nonexistent.go"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "file info not found")
+}
+
+func TestProjectComposer_formatInterface(t *testing.T) {
+	composer := &composer.ProjectComposer{}
+	iface := &types.InterfaceInfo{
+		Name:      "example.com/testproject.MyInterface",
+		Comment:   "MyInterface is a sample interface.",
+		Embeddeds: []string{"example.com/testproject.BaseInterface"},
+		Methods: []*types.InterfaceMethod{
+			{
+				Name:        "DoSomething",
+				Comment:     "DoSomething does something important.",
+				Parameters:  []string{"int", "string"},
+				ReturnTypes: []string{"error"},
+			},
+			{
+				Name:        "GetValue",
+				Comment:     "",
+				Parameters:  []string{},
+				ReturnTypes: []string{"int"},
+			},
+		},
+	}
+
+	var builder strings.Builder
+	composer.FormatInterface(&builder, iface, "  ")
+	output := builder.String()
+
+	assert.Contains(t, output, "Interface: example.com/testproject.MyInterface")
+	assert.Contains(t, output, "Comment: MyInterface is a sample interface.")
+	assert.Contains(t, output, "Embeds:")
+	assert.Contains(t, output, "- example.com/testproject.BaseInterface")
+	assert.Contains(t, output, "Methods:")
+	assert.Contains(t, output, "- DoSomething(int, string) (error)")
+	assert.Contains(t, output, "Comment: DoSomething does something important.")
+	assert.Contains(t, output, "- GetValue() (int)")
+}
+
+func TestProjectComposer_UsedImportedStructs_InterfaceAndStruct(t *testing.T) {
+	projectInfo := map[string]*types.FileInfo{
+		"/project/file.go": {
+			PackageName: "main",
+			Imports:     []string{},
+			Functions:   []string{},
+			Structs: []*types.StructInfo{
+				{
+					Name: "testme/dto.MyDTO",
+					Fields: []*types.StructField{
+						{Name: "Foo", Type: "string"},
+						{Name: "Bar", Type: "int"},
+					},
+				},
+			},
+			Interfaces: []*types.InterfaceInfo{
+				{
+					Name:    "testme/dto.I",
+					Comment: "I is an interface.",
+					Methods: []*types.InterfaceMethod{
+						{
+							Name:        "Do",
+							Parameters:  []string{"int"},
+							ReturnTypes: []string{"error"},
+						},
+					},
+				},
+			},
+			UsedImportedStructs: []*types.StructInfo{
+				{Name: "testme/dto.MyDTO"},
+				{Name: "testme/dto.I"},
+			},
+		},
+	}
+	composer := composer.New(projectInfo)
+	output, err := composer.Compose("/project/file.go")
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Struct: testme/dto.MyDTO")
+	assert.Contains(t, output, "- Foo string")
+	assert.Contains(t, output, "- Bar int")
+	assert.Contains(t, output, "Interface: testme/dto.I")
+	assert.Contains(t, output, "Methods:")
+	assert.Contains(t, output, "- Do(int) (error)")
 }
