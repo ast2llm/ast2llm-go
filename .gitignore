@@ -33,3 +33,6 @@ go.work.sum
 
 # Exclude mac os specific files
 .DS_Store
+
+# MCP server for local testing via MCP Inspector
+mcp-server

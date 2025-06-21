@@ -126,9 +126,9 @@ This MCP server is under active development and may have stability issues or inc
 
 ### Language Support
 - [x] Support for struct types
-- [ ] Support for interface types
-- [ ] Support for function types
-- [ ] Support for global variables
+- [x] Support for interface types
+- [x] Support for function types
+- [x] Support for global variables
 
 ### Multi-file Context
 - [ ] Analyze multiple open files simultaneously
@@ -137,7 +137,10 @@ This MCP server is under active development and may have stability issues or inc
 
 ### AST Representation
 - [ ] Improved type hierarchy visualization
-- [ ] Research optimal AST representation for LLMs
+- [ ] Research optimal AST representation for LLMs. Provide different output formats tailored to various scenarios like in [repomix](https://repomix.com):
+  - [ ] **XML**: For compatibility with traditional solutions akin to Repomix.
+  - [ ] **JSON**: A modern format suitable for integration with contemporary tools and environments.
+  - [ ] **Markdown**: An easily readable format ideal for quick viewing and documenting changes.
 
 ### Performance
 - [ ] Incremental parsing

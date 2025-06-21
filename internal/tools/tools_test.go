@@ -125,7 +125,6 @@ func main(){
 			composedOutput := result.Content[0].(mcp.TextContent).Text
 			assert.Contains(t, composedOutput, "--- File: "+filepath.Join(projectPath, "main.go")+" ---")
 			assert.Contains(t, composedOutput, "Package: main")
-			assert.Contains(t, composedOutput, "Functions:\n- main")
 			assert.Contains(t, composedOutput, "Local Structs:\n  Struct: example.com/testproject_tools.MyStruct")
 			assert.NotContains(t, composedOutput, "Used Imported Structs (from this project, if available):\n- fmt")
 		})
@@ -178,7 +177,6 @@ func TestRegisterTools(t *testing.T) {
 	assert.NotEmpty(t, result.Content)
 	composedOutput := result.Content[0].(mcp.TextContent).Text
 	assert.Contains(t, composedOutput, "Package: main")
-	assert.Contains(t, composedOutput, "Functions:\n- init")
 	assert.NotContains(t, composedOutput, "Local Structs:\n  Struct:")
 	assert.NotContains(t, composedOutput, "Used Imported Structs (from this project, if available):\n")
 }

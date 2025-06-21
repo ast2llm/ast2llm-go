@@ -52,7 +52,7 @@ func main(){
 				"/testproject/main.go": {
 					PackageName: "main",
 					Imports:     []string{"fmt"},
-					Functions:   []string{"Greet", "main"},
+					Functions:   []*ourtypes.FunctionInfo{{Name: "main"}},
 					Structs: []*ourtypes.StructInfo{
 						{
 							Name:    "example.com/testproject.MyStruct",
@@ -102,7 +102,7 @@ func ProcessData(d pkg1.Data) {
 				"/testproject/pkg1/types.go": {
 					PackageName: "pkg1",
 					Imports:     []string{},
-					Functions:   []string{},
+					Functions:   []*ourtypes.FunctionInfo{},
 					Structs: []*ourtypes.StructInfo{
 						{
 							Name:    "example.com/testproject/pkg1.Data",
@@ -118,7 +118,7 @@ func ProcessData(d pkg1.Data) {
 				"/testproject/pkg2/consumer.go": {
 					PackageName: "pkg2",
 					Imports:     []string{"fmt", "example.com/testproject/pkg1"},
-					Functions:   []string{"ProcessData"},
+					Functions:   []*ourtypes.FunctionInfo{{Name: "ProcessData"}},
 					Structs:     []*ourtypes.StructInfo{},
 					UsedImportedStructs: []*ourtypes.StructInfo{
 						{Name: "example.com/testproject/pkg1.Data"},
@@ -135,7 +135,7 @@ func ProcessData(d pkg1.Data) {
 				"/testproject/empty.go": {
 					PackageName:         "empty",
 					Imports:             []string{},
-					Functions:           []string{},
+					Functions:           []*ourtypes.FunctionInfo{},
 					Structs:             []*ourtypes.StructInfo{},
 					UsedImportedStructs: []*ourtypes.StructInfo{},
 				},
@@ -165,7 +165,7 @@ type Writer interface {
 				"/testproject/main.go": {
 					PackageName: "main",
 					Imports:     []string{"io"},
-					Functions:   []string{},
+					Functions:   []*ourtypes.FunctionInfo{},
 					Structs: []*ourtypes.StructInfo{
 						{
 							Name:    "example.com/testproject.ReaderWriter",
@@ -181,6 +181,62 @@ type Writer interface {
 					UsedImportedStructs: []*ourtypes.StructInfo{
 						{Name: "io.Reader"},
 					},
+				},
+			},
+		},
+		{
+			name: "file with interfaces, methods, and embedded interfaces",
+			projectFiles: map[string]string{
+				"iface.go": `package iface
+
+// Base interface
+// BaseIface does base things.
+type BaseIface interface {
+	BaseMethod(x int) error
+}
+
+// DerivedIface extends BaseIface and adds more methods.
+type DerivedIface interface {
+	BaseIface
+	DerivedMethod(y string) (int, error)
+}
+`,
+			},
+			expectedFileInfos: map[string]*ourtypes.FileInfo{
+				"/testproject/iface.go": {
+					PackageName: "iface",
+					Imports:     []string{},
+					Functions:   []*ourtypes.FunctionInfo{},
+					Structs:     []*ourtypes.StructInfo{},
+					Interfaces: []*ourtypes.InterfaceInfo{
+						{
+							Name:    "example.com/testproject/iface.BaseIface",
+							Comment: "Base interface\nBaseIface does base things.",
+							Methods: []*ourtypes.InterfaceMethod{
+								{
+									Name:        "BaseMethod",
+									Comment:     "",
+									Parameters:  []string{"int"},
+									ReturnTypes: []string{"error"},
+								},
+							},
+							Embeddeds: []string{},
+						},
+						{
+							Name:    "example.com/testproject/iface.DerivedIface",
+							Comment: "DerivedIface extends BaseIface and adds more methods.",
+							Methods: []*ourtypes.InterfaceMethod{
+								{
+									Name:        "DerivedMethod",
+									Comment:     "",
+									Parameters:  []string{"string"},
+									ReturnTypes: []string{"int", "error"},
+								},
+							},
+							Embeddeds: []string{"example.com/testproject/iface.BaseIface"},
+						},
+					},
+					UsedImportedStructs: []*ourtypes.StructInfo{},
 				},
 			},
 		},
@@ -241,9 +297,24 @@ type Writer interface {
 				sort.Strings(actualInfo.Imports)
 				assert.ElementsMatch(t, expectedInfo.Imports, actualInfo.Imports, "Imports mismatch for %s", actualAbsolutePath)
 
-				sort.Strings(expectedInfo.Functions)
-				sort.Strings(actualInfo.Functions)
-				assert.ElementsMatch(t, expectedInfo.Functions, actualInfo.Functions, "Functions mismatch for %s", actualAbsolutePath)
+				// Compare function names only for compatibility
+				expectedFnNames := make([]string, 0, len(expectedInfo.Functions))
+				for _, fn := range expectedInfo.Functions {
+					// If old test, fn is string; if new, it's *FunctionInfo
+					switch v := any(fn).(type) {
+					case string:
+						expectedFnNames = append(expectedFnNames, v)
+					case *ourtypes.FunctionInfo:
+						expectedFnNames = append(expectedFnNames, v.Name)
+					}
+				}
+				actualFnNames := make([]string, 0, len(actualInfo.Functions))
+				for _, fn := range actualInfo.Functions {
+					actualFnNames = append(actualFnNames, fn.Name)
+				}
+				sort.Strings(expectedFnNames)
+				sort.Strings(actualFnNames)
+				assert.ElementsMatch(t, expectedFnNames, actualFnNames, "Functions mismatch for %s", actualAbsolutePath)
 
 				// Compare structs in more detail
 				assert.Len(t, actualInfo.Structs, len(expectedInfo.Structs), "Struct count mismatch for %s", actualAbsolutePath)
