@@ -106,7 +106,7 @@ func NewMyPkgStruct(id, name string) *MyPkgStruct {
 	assert.Contains(t, composedOutput, "Local Structs:\n  Struct: example.com/testproject.MyStruct\n    Comment: MyStruct is a sample struct.\n    Fields:\n      - Field1 string\n      - Field2 int\n    Methods:\n      - MyMethod(string) (string, error)\n        Comment: MyMethod is a sample method for MyStruct.")
 
 	// For imported structs, we now expect full details if they are from the project.
-	assert.Contains(t, composedOutput, "Used Imported Structs (from this project, if available):\n  Struct: example.com/testproject/internal/mypkg.MyPkgStruct\n    Comment: MyPkgStruct is a struct in mypkg.\n    Fields:\n      - ID string\n      - Name string")
+	assert.Contains(t, composedOutput, "Used Items From Other Packages:\n  Struct: example.com/testproject/internal/mypkg.MyPkgStruct\n    Comment: MyPkgStruct is a struct in mypkg.\n    Fields:\n      - ID string\n      - Name string")
 
 	// Test Compose for mypkg.go
 	mypkgGoPath := filepath.Join(mypkgDir, "mypkg.go")

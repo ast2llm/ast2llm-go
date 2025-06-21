@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	gotypes "go/types" // Alias go/types to avoid conflict
 	"log"
@@ -99,6 +101,14 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 							}
 						}
 					}
+				} else if valSpec, isValueSpec := spec.(*ast.ValueSpec); isValueSpec {
+					// This is a var or const declaration
+					for i, name := range valSpec.Names {
+						if obj := pkg.TypesInfo.Defs[name]; obj != nil {
+							varInfo := p.extractGlobalVarInfo(obj, genDecl, valSpec, i, pkg)
+							fileInfo.GlobalVars = append(fileInfo.GlobalVars, varInfo)
+						}
+					}
 				}
 			}
 		} else if funcDecl, ok := n.(*ast.FuncDecl); ok {
@@ -127,7 +137,95 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 	// Collect used imported functions (by fully qualified name)
 	fileInfo.UsedImportedFunctions = p.extractUsedImportedFunctions(file, pkg, projectPkgs)
 
+	// Collect used imported global vars (by fully qualified name)
+	fileInfo.UsedImportedGlobalVars = p.extractUsedImportedGlobalVars(file, pkg, projectPkgs)
+
 	return fileInfo
+}
+
+// extractUsedImportedGlobalVars extracts detailed information about imported global variables used in the file.
+func (p *ProjectParser) extractUsedImportedGlobalVars(file *ast.File, pkg *packages.Package, projectPkgs []*packages.Package) []*ourtypes.GlobalVarInfo {
+	usedVars := make(map[string]*ourtypes.GlobalVarInfo)
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		if selExpr, ok := n.(*ast.SelectorExpr); ok {
+			if obj := pkg.TypesInfo.Uses[selExpr.Sel]; obj != nil {
+				// We are looking for either a variable or a constant.
+				_, isVar := obj.(*gotypes.Var)
+				_, isConst := obj.(*gotypes.Const)
+
+				if isVar || isConst {
+					if obj.Pkg() != nil && obj.Pkg() != pkg.Types { // Check if it's from another package
+						varName := obj.Pkg().Path() + "." + obj.Name()
+						if _, exists := usedVars[varName]; !exists {
+							var foundVar *ourtypes.GlobalVarInfo
+							// Search for original declaration in project packages
+							for _, pPkg := range projectPkgs {
+								if pPkg.PkgPath != obj.Pkg().Path() {
+									continue
+								}
+
+								for _, fAst := range pPkg.Syntax {
+									ast.Inspect(fAst, func(node ast.Node) bool {
+										if genDecl, ok := node.(*ast.GenDecl); ok {
+											for _, spec := range genDecl.Specs {
+												if valSpec, ok := spec.(*ast.ValueSpec); ok {
+													for i, name := range valSpec.Names {
+														if name.Name == obj.Name() {
+															if defObj := pPkg.TypesInfo.Defs[name]; defObj != nil {
+																foundVar = p.extractGlobalVarInfo(defObj, genDecl, valSpec, i, pPkg)
+																// We need to set the fully qualified name
+																foundVar.Name = varName
+																return false // stop inner inspect
+															}
+														}
+													}
+												}
+											}
+										}
+										return foundVar == nil // continue if not found
+									})
+									if foundVar != nil {
+										break
+									}
+								}
+								if foundVar != nil {
+									break
+								}
+							}
+
+							if foundVar != nil {
+								usedVars[varName] = foundVar
+							} else {
+								// Fallback for stdlib or not found
+								if cnst, isConst := obj.(*gotypes.Const); isConst {
+									usedVars[varName] = &ourtypes.GlobalVarInfo{
+										Name:    varName,
+										Type:    cnst.Type().String(),
+										Value:   cnst.Val().String(),
+										IsConst: true,
+									}
+								} else {
+									usedVars[varName] = &ourtypes.GlobalVarInfo{
+										Name:    varName,
+										Type:    obj.Type().String(),
+										IsConst: false,
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	result := make([]*ourtypes.GlobalVarInfo, 0, len(usedVars))
+	for _, v := range usedVars {
+		result = append(result, v)
+	}
+	return result
 }
 
 // extractUsedImportedFunctions extracts detailed information about imported functions used in the file.
@@ -488,4 +586,40 @@ func (p *ProjectParser) extractUsedImportedStructInfoFromFile(file *ast.File, pk
 		result = append(result, s)
 	}
 	return result
+}
+
+// extractGlobalVarInfo extracts information about a global variable or constant.
+func (p *ProjectParser) extractGlobalVarInfo(obj gotypes.Object, genDecl *ast.GenDecl, valSpec *ast.ValueSpec, specIndex int, pkg *packages.Package) *ourtypes.GlobalVarInfo {
+	comment := ""
+	if valSpec.Doc != nil {
+		comment = valSpec.Doc.Text()
+	} else if genDecl.Doc != nil {
+		comment = genDecl.Doc.Text()
+	}
+
+	value := ""
+	isConst := false
+
+	if c, ok := obj.(*gotypes.Const); ok {
+		isConst = true
+		value = c.Val().String()
+	} else if _, ok := obj.(*gotypes.Var); ok {
+		// For vars, try to get the value from the AST if available
+		if specIndex < len(valSpec.Values) {
+			valueExpr := valSpec.Values[specIndex]
+
+			var buf bytes.Buffer
+			if err := printer.Fprint(&buf, pkg.Fset, valueExpr); err == nil {
+				value = buf.String()
+			}
+		}
+	}
+
+	return &ourtypes.GlobalVarInfo{
+		Name:    obj.Name(),
+		Comment: strings.TrimSpace(comment),
+		Type:    obj.Type().String(),
+		Value:   value,
+		IsConst: isConst,
+	}
 }

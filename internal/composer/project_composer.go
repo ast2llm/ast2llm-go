@@ -48,6 +48,14 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		builder.WriteString("\n")
 	}
 
+	if len(fileInfo.GlobalVars) > 0 {
+		builder.WriteString("Global Variables/Constants:\n")
+		for _, gv := range fileInfo.GlobalVars {
+			p.FormatGlobalVar(&builder, gv, "  ")
+		}
+		builder.WriteString("\n")
+	}
+
 	if len(fileInfo.Structs) > 0 {
 		builder.WriteString("Local Structs:\n")
 		for _, s := range fileInfo.Structs {
@@ -62,8 +70,8 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		}
 	}
 
-	if len(fileInfo.UsedImportedStructs) > 0 || len(fileInfo.UsedImportedFunctions) > 0 {
-		builder.WriteString("Used Imported Structs (from this project, if available):\n")
+	if len(fileInfo.UsedImportedStructs) > 0 || len(fileInfo.UsedImportedFunctions) > 0 || len(fileInfo.UsedImportedGlobalVars) > 0 {
+		builder.WriteString("Used Items From Other Packages:\n")
 		// Create maps to look up all local structs, interfaces, and functions by their fully qualified names
 		projectStructsMap := make(map[string]*ourtypes.StructInfo)
 		projectInterfacesMap := make(map[string]*ourtypes.InterfaceInfo)
@@ -93,6 +101,9 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		}
 		for _, f := range fileInfo.UsedImportedFunctions {
 			p.FormatFunction(&builder, f, "  ")
+		}
+		for _, gv := range fileInfo.UsedImportedGlobalVars {
+			p.FormatGlobalVar(&builder, gv, "  ")
 		}
 	}
 

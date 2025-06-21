@@ -72,7 +72,7 @@ func MyPkgFunction(a, b int) (int, error) {
 	composedOutput, err := composer.Compose(mainGoPath)
 	assert.NoError(t, err)
 
-	assert.Contains(t, composedOutput, "Used Imported Structs (from this project, if available):")
+	assert.Contains(t, composedOutput, "Used Items From Other Packages:")
 	assert.Contains(t, composedOutput, "Function: example.com/testproject/internal/mypkg.MyPkgFunction")
 	assert.Contains(t, composedOutput, "  Comment: MyPkgFunction creates return int.")
 	assert.Contains(t, composedOutput, "  Signature: (a int, b int) -> (int, error)")
