@@ -100,7 +100,9 @@ func NewMyPkgStruct(id, name string) *MyPkgStruct {
 	assert.Contains(t, composedOutput, "--- File: "+mainGoPath+" ---")
 	assert.Contains(t, composedOutput, "Package: main")
 	assert.Contains(t, composedOutput, "Imports:\n- fmt\n- log\n- example.com/testproject/internal/mypkg")
-	assert.Contains(t, composedOutput, "Functions:\n- MyMethod()\n- main()")
+	assert.Contains(t, composedOutput, "Functions:")
+	assert.Contains(t, composedOutput, "Function: main")
+	assert.Contains(t, composedOutput, "Signature: ()")
 	assert.Contains(t, composedOutput, "Local Structs:\n  Struct: example.com/testproject.MyStruct\n    Comment: MyStruct is a sample struct.\n    Fields:\n      - Field1 string\n      - Field2 int\n    Methods:\n      - MyMethod(string) (string, error)\n        Comment: MyMethod is a sample method for MyStruct.")
 
 	// For imported structs, we now expect full details if they are from the project.
@@ -116,7 +118,9 @@ func NewMyPkgStruct(id, name string) *MyPkgStruct {
 	assert.Contains(t, composedOutputPkg, "--- File: "+mypkgGoPath+" ---")
 	assert.Contains(t, composedOutputPkg, "Package: mypkg")
 	assert.Contains(t, composedOutputPkg, "Local Structs:\n  Struct: example.com/testproject/internal/mypkg.MyPkgStruct\n    Comment: MyPkgStruct is a struct in mypkg.\n    Fields:\n      - ID string\n      - Name string")
-	assert.Contains(t, composedOutputPkg, "Functions:\n- NewMyPkgStruct()")
+	assert.Contains(t, composedOutputPkg, "Functions:")
+	assert.Contains(t, composedOutputPkg, "Function: NewMyPkgStruct")
+	assert.Contains(t, composedOutputPkg, "Signature: (id string, name string) -> (*example.com/testproject/internal/mypkg.MyPkgStruct)")
 	// No used imported structs in mypkg.go test case
 
 	// Test for non-existent file
@@ -166,7 +170,7 @@ func TestProjectComposer_UsedImportedStructs_InterfaceAndStruct(t *testing.T) {
 		"/project/file.go": {
 			PackageName: "main",
 			Imports:     []string{},
-			Functions:   []string{},
+			Functions:   []*types.FunctionInfo{},
 			Structs: []*types.StructInfo{
 				{
 					Name: "testme/dto.MyDTO",

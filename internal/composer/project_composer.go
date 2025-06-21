@@ -43,7 +43,7 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 	if len(fileInfo.Functions) > 0 {
 		builder.WriteString("Functions:\n")
 		for _, fn := range fileInfo.Functions {
-			builder.WriteString(fmt.Sprintf("- %s()\n", fn))
+			p.FormatFunction(&builder, fn, "  ")
 		}
 		builder.WriteString("\n")
 	}
@@ -51,7 +51,7 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 	if len(fileInfo.Structs) > 0 {
 		builder.WriteString("Local Structs:\n")
 		for _, s := range fileInfo.Structs {
-			p.formatStruct(&builder, s, "  ")
+			p.FormatStruct(&builder, s, "  ")
 		}
 	}
 
@@ -62,11 +62,12 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 		}
 	}
 
-	if len(fileInfo.UsedImportedStructs) > 0 {
+	if len(fileInfo.UsedImportedStructs) > 0 || len(fileInfo.UsedImportedFunctions) > 0 {
 		builder.WriteString("Used Imported Structs (from this project, if available):\n")
-		// Create a map to easily look up all local structs and interfaces by их fully qualified names
+		// Create maps to look up all local structs, interfaces, and functions by their fully qualified names
 		projectStructsMap := make(map[string]*ourtypes.StructInfo)
 		projectInterfacesMap := make(map[string]*ourtypes.InterfaceInfo)
+		projectFunctionsMap := make(map[string]*ourtypes.FunctionInfo)
 		for _, info := range p.projectInfo {
 			for _, s := range info.Structs {
 				projectStructsMap[s.Name] = s
@@ -74,26 +75,32 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 			for _, i := range info.Interfaces {
 				projectInterfacesMap[i.Name] = i
 			}
+			for _, f := range info.Functions {
+				projectFunctionsMap[f.Name] = f
+			}
 		}
 
 		for _, s := range fileInfo.UsedImportedStructs {
-			// Структуры
 			if detailedStruct, ok := projectStructsMap[s.Name]; ok {
-				p.formatStruct(&builder, detailedStruct, "  ")
+				p.FormatStruct(&builder, detailedStruct, "  ")
 			} else if detailedIface, ok := projectInterfacesMap[s.Name]; ok {
 				p.FormatInterface(&builder, detailedIface, "  ")
+			} else if detailedFunc, ok := projectFunctionsMap[s.Name]; ok {
+				p.FormatFunction(&builder, detailedFunc, "  ")
 			} else {
-				// Внешний импортированный тип, не найден в проекте
 				builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
 			}
+		}
+		for _, f := range fileInfo.UsedImportedFunctions {
+			p.FormatFunction(&builder, f, "  ")
 		}
 	}
 
 	return builder.String(), nil
 }
 
-// formatStruct formats a StructInfo into the StringBuilder.
-func (p *ProjectComposer) formatStruct(builder *strings.Builder, s *ourtypes.StructInfo, indent string) {
+// FormatStruct formats a StructInfo into the StringBuilder.
+func (p *ProjectComposer) FormatStruct(builder *strings.Builder, s *ourtypes.StructInfo, indent string) {
 	builder.WriteString(fmt.Sprintf("%sStruct: %s\n", indent, s.Name))
 	if s.Comment != "" {
 		builder.WriteString(fmt.Sprintf("%s  Comment: %s\n", indent, s.Comment))

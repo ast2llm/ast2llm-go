@@ -2,22 +2,24 @@ package types
 
 // FileInfo represents the parsed information about a Go file
 type FileInfo struct {
-	PackageName         string           // Name of the package
-	Imports             []string         // List of imported packages
-	Functions           []string         // List of function names
-	Structs             []*StructInfo    // List of struct names with their comments, fields, and methods
-	Interfaces          []*InterfaceInfo // List of interface names with their comments, methods, and embeddeds
-	UsedImportedStructs []*StructInfo    // List of imported struct names used in the file, with fields and methods
+	PackageName           string           // Name of the package
+	Imports               []string         // List of imported packages
+	Functions             []*FunctionInfo  // List of functions with details
+	Structs               []*StructInfo    // List of struct names with their comments, fields, and methods
+	Interfaces            []*InterfaceInfo // List of interface names with their comments, methods, and embeddeds
+	UsedImportedStructs   []*StructInfo    // List of imported struct names used in the file, with fields and methods
+	UsedImportedFunctions []*FunctionInfo  // List of imported function names used in the file, with signature and comment
 }
 
 // NewFileInfo creates a new FileInfo instance
 func NewFileInfo() *FileInfo {
 	return &FileInfo{
-		Imports:             make([]string, 0),
-		Functions:           make([]string, 0),
-		Structs:             make([]*StructInfo, 0),
-		Interfaces:          make([]*InterfaceInfo, 0),
-		UsedImportedStructs: make([]*StructInfo, 0),
+		Imports:               make([]string, 0),
+		Functions:             make([]*FunctionInfo, 0),
+		Structs:               make([]*StructInfo, 0),
+		Interfaces:            make([]*InterfaceInfo, 0),
+		UsedImportedStructs:   make([]*StructInfo, 0),
+		UsedImportedFunctions: make([]*FunctionInfo, 0),
 	}
 }
 
@@ -93,4 +95,12 @@ func NewInterfaceInfo() *InterfaceInfo {
 		Methods:   make([]*InterfaceMethod, 0),
 		Embeddeds: make([]string, 0),
 	}
+}
+
+// FunctionInfo represents detailed information about a function
+type FunctionInfo struct {
+	Name    string   // Function name (fully qualified)
+	Comment string   // Function comment
+	Params  []string // List of parameter types (with names if possible)
+	Returns []string // List of return types
 }

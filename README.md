@@ -127,7 +127,7 @@ This MCP server is under active development and may have stability issues or inc
 ### Language Support
 - [x] Support for struct types
 - [x] Support for interface types
-- [ ] Support for function types
+- [x] Support for function types
 - [ ] Support for global variables
 
 ### Multi-file Context

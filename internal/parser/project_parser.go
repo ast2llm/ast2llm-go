@@ -58,7 +58,7 @@ func (p *ProjectParser) ParseProject(projectPath string) (ProjectInfo, error) {
 
 		for _, file := range pkg.Syntax {
 			absolutePath := p.fset.File(file.Pos()).Name()
-			fileInfo := p.extractFileInfoForFile(file, pkg)
+			fileInfo := p.extractFileInfoForFile(file, pkg, pkgs)
 			fileInfos[absolutePath] = fileInfo
 		}
 	}
@@ -67,7 +67,7 @@ func (p *ProjectParser) ParseProject(projectPath string) (ProjectInfo, error) {
 }
 
 // extractFileInfoForFile extracts detailed information for a single AST file within a package.
-func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Package) *ourtypes.FileInfo {
+func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Package, projectPkgs []*packages.Package) *ourtypes.FileInfo {
 	fileInfo := ourtypes.NewFileInfo()
 	fileInfo.PackageName = file.Name.Name
 
@@ -102,8 +102,11 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 				}
 			}
 		} else if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			// Functions and methods are added to fileInfo.Functions
-			fileInfo.Functions = append(fileInfo.Functions, funcDecl.Name.Name)
+			// Only top-level (non-method) functions
+			if funcDecl.Recv == nil {
+				fnInfo := p.extractFunctionInfo(funcDecl, pkg)
+				fileInfo.Functions = append(fileInfo.Functions, fnInfo)
+			}
 		}
 		return true
 	})
@@ -121,7 +124,139 @@ func (p *ProjectParser) extractFileInfoForFile(file *ast.File, pkg *packages.Pac
 	// Extract used imported structs from this file
 	fileInfo.UsedImportedStructs = p.extractUsedImportedStructInfoFromFile(file, pkg)
 
+	// Collect used imported functions (by fully qualified name)
+	fileInfo.UsedImportedFunctions = p.extractUsedImportedFunctions(file, pkg, projectPkgs)
+
 	return fileInfo
+}
+
+// extractUsedImportedFunctions extracts detailed information about imported functions used in the file.
+func (p *ProjectParser) extractUsedImportedFunctions(file *ast.File, pkg *packages.Package, projectPkgs []*packages.Package) []*ourtypes.FunctionInfo {
+	var usedImportedFunctions []*ourtypes.FunctionInfo
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fun := call.Fun.(type) {
+		case *ast.SelectorExpr:
+			if _, ok := fun.X.(*ast.Ident); ok {
+				obj := pkg.TypesInfo.Uses[fun.Sel]
+				if obj != nil {
+					if fn, ok := obj.(*gotypes.Func); ok {
+						// Only functions from other packages
+						if fn.Pkg() != nil && fn.Pkg().Path() != pkg.PkgPath {
+							fqName := fn.String()
+							found := false
+							for _, pkg2 := range projectPkgs {
+								for _, fileAst := range pkg2.Syntax {
+									ast.Inspect(fileAst, func(n ast.Node) bool {
+										funcDecl, ok := n.(*ast.FuncDecl)
+										if !ok || funcDecl.Recv != nil {
+											return true
+										}
+										obj2 := pkg2.TypesInfo.Defs[funcDecl.Name]
+										if obj2 == nil {
+											return true
+										}
+										if fn2, ok := obj2.(*gotypes.Func); ok && fn2.String() == fqName {
+											params := []string{}
+											if funcDecl.Type.Params != nil {
+												for _, field := range funcDecl.Type.Params.List {
+													typeStr := pkg2.TypesInfo.TypeOf(field.Type).String()
+													for _, name := range field.Names {
+														params = append(params, name.Name+" "+typeStr)
+													}
+													if len(field.Names) == 0 {
+														params = append(params, typeStr)
+													}
+												}
+											}
+											returns := []string{}
+											if funcDecl.Type.Results != nil {
+												for _, field := range funcDecl.Type.Results.List {
+													typeStr := pkg2.TypesInfo.TypeOf(field.Type).String()
+													for range field.Names {
+														returns = append(returns, typeStr)
+													}
+													if len(field.Names) == 0 {
+														returns = append(returns, typeStr)
+													}
+												}
+											}
+											comment := ""
+											if funcDecl.Doc != nil {
+												comment = strings.TrimSpace(funcDecl.Doc.Text())
+											}
+											usedImportedFunctions = append(usedImportedFunctions, &ourtypes.FunctionInfo{
+												Name:    fn2.Pkg().Path() + "." + fn2.Name(),
+												Comment: comment,
+												Params:  params,
+												Returns: returns,
+											})
+											found = true
+											return false
+										}
+										return true
+									})
+									if found {
+										break
+									}
+								}
+								if found {
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	return usedImportedFunctions
+}
+
+// extractFunctionInfo extracts detailed information about a function.
+func (p *ProjectParser) extractFunctionInfo(funcDecl *ast.FuncDecl, pkg *packages.Package) *ourtypes.FunctionInfo {
+	fnInfo := &ourtypes.FunctionInfo{
+		Name:    funcDecl.Name.Name,
+		Comment: "",
+		Params:  []string{},
+		Returns: []string{},
+	}
+	// Extract comment
+	if funcDecl.Doc != nil {
+		fnInfo.Comment = strings.TrimSpace(funcDecl.Doc.Text())
+	}
+	// Extract parameters
+	if funcDecl.Type.Params != nil {
+		for _, field := range funcDecl.Type.Params.List {
+			typeStr := pkg.TypesInfo.TypeOf(field.Type).String()
+			for _, name := range field.Names {
+				fnInfo.Params = append(fnInfo.Params, name.Name+" "+typeStr)
+			}
+			// Anonymous parameter (e.g. func(int))
+			if len(field.Names) == 0 {
+				fnInfo.Params = append(fnInfo.Params, typeStr)
+			}
+		}
+	}
+	// Extract return types
+	if funcDecl.Type.Results != nil {
+		for _, field := range funcDecl.Type.Results.List {
+			typeStr := pkg.TypesInfo.TypeOf(field.Type).String()
+			// Named return values
+			for range field.Names {
+				fnInfo.Returns = append(fnInfo.Returns, typeStr)
+			}
+			// Anonymous return value
+			if len(field.Names) == 0 {
+				fnInfo.Returns = append(fnInfo.Returns, typeStr)
+			}
+		}
+	}
+	return fnInfo
 }
 
 // extractDetailedStructInfo extracts comprehensive details about a struct
