@@ -33,12 +33,25 @@ type StructField struct {
 	Type string // Field type
 }
 
+// NewStructField creates a new StructField instance
+func NewStructField() *StructField {
+	return &StructField{}
+}
+
 // StructMethod represents a method associated with a struct
 type StructMethod struct {
 	Name        string   // Method name
 	Comment     string   // Method comment
 	Parameters  []string // List of parameter types
 	ReturnTypes []string // List of return types
+}
+
+// NewStructMethod creates a new StructMethod instance
+func NewStructMethod() *StructMethod {
+	return &StructMethod{
+		Parameters:  make([]string, 0),
+		ReturnTypes: make([]string, 0),
+	}
 }
 
 // StructInfo represents detailed information about a struct
@@ -65,6 +78,15 @@ type Node struct {
 	Files     []string // Source files in the package
 }
 
+// NewNode creates a new Node instance
+func NewNode() *Node {
+	return &Node{
+		Functions: make([]string, 0),
+		DependsOn: make([]string, 0),
+		Files:     make([]string, 0),
+	}
+}
+
 // DependencyGraph represents the project's dependency structure
 type DependencyGraph struct {
 	Nodes map[string]*Node // Key: package path
@@ -83,6 +105,14 @@ type InterfaceMethod struct {
 	Comment     string   // Method comment
 	Parameters  []string // List of parameter types
 	ReturnTypes []string // List of return types
+}
+
+// NewInterfaceMethod creates a new InterfaceMethod instance
+func NewInterfaceMethod() *InterfaceMethod {
+	return &InterfaceMethod{
+		Parameters:  make([]string, 0),
+		ReturnTypes: make([]string, 0),
+	}
 }
 
 // InterfaceInfo represents detailed information about an interface
@@ -110,10 +140,23 @@ type GlobalVarInfo struct {
 	IsConst bool   // True if it's a constant
 }
 
+// NewGlobalVarInfo creates a new GlobalVarInfo instance
+func NewGlobalVarInfo() *GlobalVarInfo {
+	return &GlobalVarInfo{}
+}
+
 // FunctionInfo represents detailed information about a function
 type FunctionInfo struct {
 	Name    string   // Function name (fully qualified)
 	Comment string   // Function comment
 	Params  []string // List of parameter types (with names if possible)
 	Returns []string // List of return types
+}
+
+// NewFunctionInfo creates a new FunctionInfo instance
+func NewFunctionInfo() *FunctionInfo {
+	return &FunctionInfo{
+		Params:  make([]string, 0),
+		Returns: make([]string, 0),
+	}
 }
