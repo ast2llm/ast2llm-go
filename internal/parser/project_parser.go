@@ -317,12 +317,9 @@ func (p *ProjectParser) extractUsedImportedFunctions(file *ast.File, pkg *packag
 
 // extractFunctionInfo extracts detailed information about a function.
 func (p *ProjectParser) extractFunctionInfo(funcDecl *ast.FuncDecl, pkg *packages.Package) *ourtypes.FunctionInfo {
-	fnInfo := &ourtypes.FunctionInfo{
-		Name:    funcDecl.Name.Name,
-		Comment: "",
-		Params:  []string{},
-		Returns: []string{},
-	}
+	fnInfo := ourtypes.NewFunctionInfo()
+	fnInfo.Name = funcDecl.Name.Name
+	fnInfo.Comment = ""
 	// Extract comment
 	if funcDecl.Doc != nil {
 		fnInfo.Comment = strings.TrimSpace(funcDecl.Doc.Text())
@@ -387,7 +384,10 @@ func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType 
 		fieldVar := structType.Field(i)
 		fieldTypeName := fieldVar.Type().String() // Use types.Type.String() for canonical name
 		fieldName := fieldVar.Name()
-		structInfo.Fields = append(structInfo.Fields, &ourtypes.StructField{Name: fieldName, Type: fieldTypeName})
+		field := ourtypes.NewStructField()
+		field.Name = fieldName
+		field.Type = fieldTypeName
+		structInfo.Fields = append(structInfo.Fields, field)
 	}
 
 	// Extract methods
@@ -422,12 +422,12 @@ func (p *ProjectParser) extractDetailedStructInfo(obj gotypes.Object, namedType 
 			return true
 		})
 
-		structInfo.Methods = append(structInfo.Methods, &ourtypes.StructMethod{
-			Name:        methodObj.Name(),
-			Comment:     methodComment,
-			Parameters:  params,
-			ReturnTypes: results,
-		})
+		method := ourtypes.NewStructMethod()
+		method.Name = methodObj.Name()
+		method.Comment = methodComment
+		method.Parameters = params
+		method.ReturnTypes = results
+		structInfo.Methods = append(structInfo.Methods, method)
 	}
 
 	return structInfo
@@ -615,11 +615,11 @@ func (p *ProjectParser) extractGlobalVarInfo(obj gotypes.Object, genDecl *ast.Ge
 		}
 	}
 
-	return &ourtypes.GlobalVarInfo{
-		Name:    obj.Name(),
-		Comment: strings.TrimSpace(comment),
-		Type:    obj.Type().String(),
-		Value:   value,
-		IsConst: isConst,
-	}
+	varInfo := ourtypes.NewGlobalVarInfo()
+	varInfo.Name = obj.Name()
+	varInfo.Comment = strings.TrimSpace(comment)
+	varInfo.Type = obj.Type().String()
+	varInfo.Value = value
+	varInfo.IsConst = isConst
+	return varInfo
 }

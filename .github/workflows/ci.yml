@@ -32,6 +32,17 @@ jobs:
     - name: Run unit tests
       run: go test -v ./...
 
+    - name: Generate coverage report
+      run: |
+        PKGS=$(go list ./... | grep -v '/cmd/')
+        go test -coverpkg=./... -covermode=atomic -coverprofile=coverage.out $PKGS
+
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: coverage.out
+
     #- name: Run golangci-lint
     #  uses: golangci/golangci-lint-action@v6
     #  with:
