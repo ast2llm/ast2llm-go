@@ -11,7 +11,7 @@ import (
 	"github.com/vlad/ast2llm-go/internal/types"
 )
 
-func TestProjectComposer_Compose_UsedImportedStructs_Function(t *testing.T) {
+func TestProjectComposer_Compose_Function(t *testing.T) {
 	// Create a temporary directory for the test project
 	tmpDir, err := os.MkdirTemp("", "testproject")
 	assert.NoError(t, err)
@@ -31,8 +31,6 @@ go 1.22
 package main
 
 import (
-	"fmt"
-	"log"
 	"example.com/testproject/internal/mypkg"
 )
 
@@ -78,7 +76,7 @@ func MyPkgFunction(a, b int) (int, error) {
 	assert.Contains(t, composedOutput, "  Signature: (a int, b int) -> (int, error)")
 }
 
-func TestProjectComposer_UsedImportedStructs_Function(t *testing.T) {
+func TestProjectComposer_Format_Function(t *testing.T) {
 	projectInfo := map[string]*types.FileInfo{
 		"/project/other.go": {
 			PackageName: "other",

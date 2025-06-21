@@ -88,72 +88,41 @@ func (p *ProjectComposer) Compose(filePath string) (string, error) {
 			}
 		}
 
+		processedItems := make(map[string]bool)
+
 		for _, s := range fileInfo.UsedImportedStructs {
+			if processedItems[s.Name] {
+				continue
+			}
 			if detailedStruct, ok := projectStructsMap[s.Name]; ok {
 				p.FormatStruct(&builder, detailedStruct, "  ")
+				processedItems[s.Name] = true
 			} else if detailedIface, ok := projectInterfacesMap[s.Name]; ok {
 				p.FormatInterface(&builder, detailedIface, "  ")
+				processedItems[s.Name] = true
 			} else if detailedFunc, ok := projectFunctionsMap[s.Name]; ok {
 				p.FormatFunction(&builder, detailedFunc, "  ")
+				processedItems[s.Name] = true
 			} else {
 				builder.WriteString(fmt.Sprintf("- %s\n", s.Name))
+				processedItems[s.Name] = true
 			}
 		}
 		for _, f := range fileInfo.UsedImportedFunctions {
+			if processedItems[f.Name] {
+				continue
+			}
 			p.FormatFunction(&builder, f, "  ")
+			processedItems[f.Name] = true
 		}
 		for _, gv := range fileInfo.UsedImportedGlobalVars {
+			if processedItems[gv.Name] {
+				continue
+			}
 			p.FormatGlobalVar(&builder, gv, "  ")
+			processedItems[gv.Name] = true
 		}
 	}
 
 	return builder.String(), nil
-}
-
-// FormatStruct formats a StructInfo into the StringBuilder.
-func (p *ProjectComposer) FormatStruct(builder *strings.Builder, s *ourtypes.StructInfo, indent string) {
-	builder.WriteString(fmt.Sprintf("%sStruct: %s\n", indent, s.Name))
-	if s.Comment != "" {
-		builder.WriteString(fmt.Sprintf("%s  Comment: %s\n", indent, s.Comment))
-	}
-
-	if len(s.Fields) > 0 {
-		builder.WriteString(fmt.Sprintf("%s  Fields:\n", indent))
-		for _, f := range s.Fields {
-			builder.WriteString(fmt.Sprintf("%s    - %s %s\n", indent, f.Name, f.Type))
-		}
-	}
-
-	if len(s.Methods) > 0 {
-		builder.WriteString(fmt.Sprintf("%s  Methods:\n", indent))
-		for _, m := range s.Methods {
-			builder.WriteString(fmt.Sprintf("%s    - %s(%s) (%s)\n", indent, m.Name, strings.Join(m.Parameters, ", "), strings.Join(m.ReturnTypes, ", ")))
-			if m.Comment != "" {
-				builder.WriteString(fmt.Sprintf("%s      Comment: %s\n", indent, m.Comment))
-			}
-		}
-	}
-}
-
-// FormatInterface formats an InterfaceInfo into the StringBuilder.
-func (p *ProjectComposer) FormatInterface(builder *strings.Builder, iface *ourtypes.InterfaceInfo, indent string) {
-	builder.WriteString(fmt.Sprintf("%sInterface: %s\n", indent, iface.Name))
-	if iface.Comment != "" {
-		builder.WriteString(fmt.Sprintf("%s  Comment: %s\n", indent, iface.Comment))
-	}
-	if len(iface.Embeddeds) > 0 {
-		builder.WriteString(fmt.Sprintf("%s  Embeds:\n", indent))
-		for _, emb := range iface.Embeddeds {
-			builder.WriteString(fmt.Sprintf("%s    - %s\n", indent, emb))
-		}
-	}
-	if len(iface.Methods) > 0 {
-		builder.WriteString(fmt.Sprintf("%s  Methods:\n", indent))
-		for _, m := range iface.Methods {
-			builder.WriteString(fmt.Sprintf("%s    - %s(%s) (%s)\n", indent, m.Name, strings.Join(m.Parameters, ", "), strings.Join(m.ReturnTypes, ", ")))
-			if m.Comment != "" {
-				builder.WriteString(fmt.Sprintf("%s      Comment: %s\n", indent, m.Comment))
-			}
-		}
-	}
 }

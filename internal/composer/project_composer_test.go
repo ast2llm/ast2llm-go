@@ -1,8 +1,6 @@
 package composer_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,200 +10,83 @@ import (
 	"github.com/vlad/ast2llm-go/internal/types"
 )
 
-func TestProjectComposer_Compose(t *testing.T) {
-	// Create a temporary directory for the test project
-	tmpDir, err := os.MkdirTemp("", "testproject")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create a dummy go.mod file
-	goModContent := `
-module example.com/testproject
-
-go 1.22
-`
-	err = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goModContent), 0644)
-	assert.NoError(t, err)
-
-	// Create dummy files
-	mainGoContent := `
-package main
-
-import (
-	"fmt"
-	"log"
-	"example.com/testproject/internal/mypkg"
-)
-
-// MyStruct is a sample struct.
-type MyStruct struct {
-	Field1 string // Field1 is a string field.
-	Field2 int    // Field2 is an integer field.
-}
-
-// MyMethod is a sample method for MyStruct.
-func (m *MyStruct) MyMethod(param1 string) (string, error) {
-	fmt.Println("Hello from MyMethod")
-	return "", nil
-}
-
-func main() {
-	fmt.Println("Hello, World!")
-	var s MyStruct
-	s.MyMethod("test")
-	_ = mypkg.MyPkgStruct{}
-	log.Printf("log test")
-}
-`
-	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(mainGoContent), 0644)
-	assert.NoError(t, err)
-
-	mypkgDir := filepath.Join(tmpDir, "internal", "mypkg")
-	err = os.MkdirAll(mypkgDir, 0755)
-	assert.NoError(t, err)
-
-	mypkgGoContent := `
-package mypkg
-
-// MyPkgStruct is a struct in mypkg.
-type MyPkgStruct struct {
-	ID   string
-	Name string
-}
-
-// NewMyPkgStruct creates a new MyPkgStruct.
-func NewMyPkgStruct(id, name string) *MyPkgStruct {
-	return &MyPkgStruct{ID: id, Name: name}
-}
-`
-	err = os.WriteFile(filepath.Join(mypkgDir, "mypkg.go"), []byte(mypkgGoContent), 0644)
-	assert.NoError(t, err)
-
-	// Parse the project
-	p := parser.New()
-	projectInfo, err := p.ParseProject(tmpDir)
-	assert.NoError(t, err)
-	assert.NotNil(t, projectInfo)
-
-	// Create a ProjectComposer
+func TestProjectComposer_Compose_FileNotFound(t *testing.T) {
+	projectInfo := parser.ProjectInfo{}
 	composer := composer.New(projectInfo)
 
-	// Test Compose for main.go
-	mainGoPath := filepath.Join(tmpDir, "main.go")
-	composedOutput, err := composer.Compose(mainGoPath)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, composedOutput)
-
-	// Assertions for main.go content
-	assert.Contains(t, composedOutput, "--- File: "+mainGoPath+" ---")
-	assert.Contains(t, composedOutput, "Package: main")
-	assert.Contains(t, composedOutput, "Imports:\n- fmt\n- log\n- example.com/testproject/internal/mypkg")
-	assert.Contains(t, composedOutput, "Functions:")
-	assert.Contains(t, composedOutput, "Function: main")
-	assert.Contains(t, composedOutput, "Signature: ()")
-	assert.Contains(t, composedOutput, "Local Structs:\n  Struct: example.com/testproject.MyStruct\n    Comment: MyStruct is a sample struct.\n    Fields:\n      - Field1 string\n      - Field2 int\n    Methods:\n      - MyMethod(string) (string, error)\n        Comment: MyMethod is a sample method for MyStruct.")
-
-	// For imported structs, we now expect full details if they are from the project.
-	assert.Contains(t, composedOutput, "Used Items From Other Packages:\n  Struct: example.com/testproject/internal/mypkg.MyPkgStruct\n    Comment: MyPkgStruct is a struct in mypkg.\n    Fields:\n      - ID string\n      - Name string")
-
-	// Test Compose for mypkg.go
-	mypkgGoPath := filepath.Join(mypkgDir, "mypkg.go")
-	composedOutputPkg, err := composer.Compose(mypkgGoPath)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, composedOutputPkg)
-
-	// Assertions for mypkg.go content
-	assert.Contains(t, composedOutputPkg, "--- File: "+mypkgGoPath+" ---")
-	assert.Contains(t, composedOutputPkg, "Package: mypkg")
-	assert.Contains(t, composedOutputPkg, "Local Structs:\n  Struct: example.com/testproject/internal/mypkg.MyPkgStruct\n    Comment: MyPkgStruct is a struct in mypkg.\n    Fields:\n      - ID string\n      - Name string")
-	assert.Contains(t, composedOutputPkg, "Functions:")
-	assert.Contains(t, composedOutputPkg, "Function: NewMyPkgStruct")
-	assert.Contains(t, composedOutputPkg, "Signature: (id string, name string) -> (*example.com/testproject/internal/mypkg.MyPkgStruct)")
-	// No used imported structs in mypkg.go test case
-
-	// Test for non-existent file
-	_, err = composer.Compose(filepath.Join(tmpDir, "nonexistent.go"))
+	_, err := composer.Compose("/path/to/nonexistent.go")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "file info not found")
+	assert.EqualError(t, err, "file info not found for path: /path/to/nonexistent.go")
 }
 
-func TestProjectComposer_formatInterface(t *testing.T) {
-	composer := &composer.ProjectComposer{}
-	iface := &types.InterfaceInfo{
-		Name:      "example.com/testproject.MyInterface",
-		Comment:   "MyInterface is a sample interface.",
-		Embeddeds: []string{"example.com/testproject.BaseInterface"},
-		Methods: []*types.InterfaceMethod{
-			{
-				Name:        "DoSomething",
-				Comment:     "DoSomething does something important.",
-				Parameters:  []string{"int", "string"},
-				ReturnTypes: []string{"error"},
-			},
-			{
-				Name:        "GetValue",
-				Comment:     "",
-				Parameters:  []string{},
-				ReturnTypes: []string{"int"},
-			},
+func TestProjectComposer_Compose_EmptyFileInfo(t *testing.T) {
+	filePath := "/path/to/empty.go"
+	projectInfo := parser.ProjectInfo{
+		filePath: {
+			PackageName: "main",
 		},
 	}
+	composer := composer.New(projectInfo)
 
-	var builder strings.Builder
-	composer.FormatInterface(&builder, iface, "  ")
-	output := builder.String()
+	output, err := composer.Compose(filePath)
+	assert.NoError(t, err)
 
-	assert.Contains(t, output, "Interface: example.com/testproject.MyInterface")
-	assert.Contains(t, output, "Comment: MyInterface is a sample interface.")
-	assert.Contains(t, output, "Embeds:")
-	assert.Contains(t, output, "- example.com/testproject.BaseInterface")
-	assert.Contains(t, output, "Methods:")
-	assert.Contains(t, output, "- DoSomething(int, string) (error)")
-	assert.Contains(t, output, "Comment: DoSomething does something important.")
-	assert.Contains(t, output, "- GetValue() (int)")
+	expected := `--- File: /path/to/empty.go ---
+Package: main
+
+`
+	assert.Equal(t, expected, output)
 }
 
-func TestProjectComposer_UsedImportedStructs_InterfaceAndStruct(t *testing.T) {
-	projectInfo := map[string]*types.FileInfo{
-		"/project/file.go": {
+func TestProjectComposer_Compose_UnresolvedImport(t *testing.T) {
+	filePath := "/project/main.go"
+	projectInfo := parser.ProjectInfo{
+		filePath: {
 			PackageName: "main",
-			Imports:     []string{},
-			Functions:   []*types.FunctionInfo{},
-			Structs: []*types.StructInfo{
-				{
-					Name: "testme/dto.MyDTO",
-					Fields: []*types.StructField{
-						{Name: "Foo", Type: "string"},
-						{Name: "Bar", Type: "int"},
-					},
-				},
-			},
-			Interfaces: []*types.InterfaceInfo{
-				{
-					Name:    "testme/dto.I",
-					Comment: "I is an interface.",
-					Methods: []*types.InterfaceMethod{
-						{
-							Name:        "Do",
-							Parameters:  []string{"int"},
-							ReturnTypes: []string{"error"},
-						},
-					},
-				},
-			},
 			UsedImportedStructs: []*types.StructInfo{
-				{Name: "testme/dto.MyDTO"},
-				{Name: "testme/dto.I"},
+				{Name: "github.com/some/external/pkg.SomeType"},
+			},
+		},
+		// No info about github.com/some/external/pkg in the project
+	}
+	composer := composer.New(projectInfo)
+
+	output, err := composer.Compose(filePath)
+	assert.NoError(t, err)
+
+	assert.Contains(t, output, "Used Items From Other Packages:")
+	assert.Contains(t, output, "- github.com/some/external/pkg.SomeType")
+}
+
+func TestProjectComposer_Compose_DeduplicatesUsedItems(t *testing.T) {
+	filePath := "/project/main.go"
+	projectInfo := parser.ProjectInfo{
+		"/project/other.go": {
+			PackageName: "other",
+			Functions: []*types.FunctionInfo{
+				{
+					Name:   "example.com/project/other.MyFunction",
+					Params: []string{"i int"},
+				},
+			},
+		},
+		filePath: {
+			PackageName: "main",
+			// MyFunction is present in both lists, which could happen due to a parser bug
+			UsedImportedStructs: []*types.StructInfo{
+				{Name: "example.com/project/other.MyFunction"},
+			},
+			UsedImportedFunctions: []*types.FunctionInfo{
+				{Name: "example.com/project/other.MyFunction", Params: []string{"i int"}},
 			},
 		},
 	}
 	composer := composer.New(projectInfo)
-	output, err := composer.Compose("/project/file.go")
+
+	output, err := composer.Compose(filePath)
 	assert.NoError(t, err)
-	assert.Contains(t, output, "Struct: testme/dto.MyDTO")
-	assert.Contains(t, output, "- Foo string")
-	assert.Contains(t, output, "- Bar int")
-	assert.Contains(t, output, "Interface: testme/dto.I")
-	assert.Contains(t, output, "Methods:")
-	assert.Contains(t, output, "- Do(int) (error)")
+
+	// The function should only be listed once.
+	count := strings.Count(output, "Function: example.com/project/other.MyFunction")
+	assert.Equal(t, 1, count, "The same used item should not be printed multiple times")
 }

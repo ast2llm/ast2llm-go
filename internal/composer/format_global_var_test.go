@@ -11,7 +11,7 @@ import (
 	"github.com/vlad/ast2llm-go/internal/types"
 )
 
-func TestProjectComposer_Compose_WithGlobalVars(t *testing.T) {
+func TestProjectComposer_Compose_GlobalVars(t *testing.T) {
 	// Create a temporary directory for the test project
 	tmpDir, err := os.MkdirTemp("", "testproject_globals")
 	assert.NoError(t, err)
@@ -91,7 +91,7 @@ var MyPkgVariable = "foo"
     Comment: MyPkgVariable is an awesome variable.`)
 }
 
-func TestProjectComposer_UsedImportedStructs_GlobalVariable(t *testing.T) {
+func TestProjectComposer_Format_GlobalVars(t *testing.T) {
 	projectInfo := map[string]*types.FileInfo{
 		"/project/other.go": {
 			PackageName: "other",
