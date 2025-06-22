@@ -1,6 +1,6 @@
 # AST2LLM for Go 
 
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Coverage Status](https://coveralls.io/repos/github/ast2llm/ast2llm-go/badge.svg?branch=add-coveralls-badge)](https://coveralls.io/github/ast2llm/ast2llm-go?branch=add-coveralls-badge) [![Build Status](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Coverage Status](https://coveralls.io/repos/github/ast2llm/ast2llm-go/badge.svg)](https://coveralls.io/github/ast2llm/ast2llm-go) [![Build Status](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml)
 
 
 **Local AST-powered context enhancement tool for LLM**  
