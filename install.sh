@@ -9,7 +9,7 @@ set -u # Treat unset variables as an error
 
 # --- Global Variables ---
 APP_NAME="ast2llm-go"
-GITHUB_REPO="vprud/ast2llm-go" # Owner/RepoName
+GITHUB_REPO="ast2llm/ast2llm-go" # Owner/RepoName
 INSTALL_DIR_DEFAULT="$HOME/.local/bin"
 TEMP_DIR=""
 NO_MODIFY_PATH=${UV_NO_MODIFY_PATH:-0}

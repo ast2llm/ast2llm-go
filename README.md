@@ -1,6 +1,6 @@
 # AST2LLM for Go 
 
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Coverage Status](https://coveralls.io/repos/github/vprud/ast2llm-go/badge.svg?branch=add-coveralls-badge)](https://coveralls.io/github/vprud/ast2llm-go?branch=add-coveralls-badge) [![Build Status](https://github.com/vprud/ast2llm-go/actions/workflows/ci.yml/badge.svg)](https://github.com/vprud/ast2llm-go/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](LICENSE) [![License](https://img.shields.io/badge/License-Apache-blue.svg)](LICENSE) [![Coverage Status](https://coveralls.io/repos/github/ast2llm/ast2llm-go/badge.svg?branch=add-coveralls-badge)](https://coveralls.io/github/ast2llm/ast2llm-go?branch=add-coveralls-badge) [![Build Status](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ast2llm/ast2llm-go/actions/workflows/ci.yml)
 
 
 **Local AST-powered context enhancement tool for LLM**  
@@ -38,13 +38,13 @@ Used Imported Structs (from this project, if available):
 To install `ast2llm-go` on your system, run the following command in your terminal:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/ast2llm/ast2llm-go/main/install.sh | sh
 ```
 
 This script will automatically detect your OS and architecture, download the appropriate binary, and attempt to add it to your PATH. You can also specify an installation directory:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh -s -- --install-dir /usr/local/bin
+curl -LsSf https://raw.githubusercontent.com/ast2llm/ast2llm-go/main/install.sh | sh -s -- --install-dir /usr/local/bin
 ```
 
 ### Self-Update
@@ -52,7 +52,7 @@ curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | 
 To update `ast2llm-go` to the latest version, simply re-run the installation command:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/ast2llm/ast2llm-go/main/install.sh | sh
 ```
 
 ## Uninstallation
@@ -60,7 +60,7 @@ curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/install.sh | 
 To remove `ast2llm-go` from your system, run the uninstallation script:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/vprud/ast2llm-go/main/uninstall.sh | sh
+curl -LsSf https://raw.githubusercontent.com/ast2llm/ast2llm-go/main/uninstall.sh | sh
 ```
 
 This script will remove the binary, clean up PATH modifications, and delete related configuration files. You may need to restart your shell after uninstallation.
@@ -121,7 +121,7 @@ This MCP server is under active development and may have stability issues or inc
 - Performance bottlenecks with large codebases
 
 **Found an issue?**  
-[Open a GitHub Issue](https://github.com/vprud/ast2llm-go/issues/new) to help us improve! We appreciate all bug reports and feature requests.
+[Open a GitHub Issue](https://github.com/ast2llm/ast2llm-go/issues/new) to help us improve! We appreciate all bug reports and feature requests.
 
 ## Roadmap
 
